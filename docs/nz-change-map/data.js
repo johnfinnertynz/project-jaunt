@@ -24698,6 +24698,150 @@ const NZ_CHANGE_MAP_DATA = {
         ]
       }
     },
+    "forestry": {
+      "label": "Forestry cover",
+      "shortLabel": "Forestry",
+      "unit": "% forest",
+      "metricLabel": "Forest, plantation, and woodlot cover",
+      "summary": "Track how indigenous forest, planted production forest, harvesting cycles, and farm-to-forest conversion change the regional landscape over time.",
+      "source": "MPI National Exotic Forest Description and New Zealand Land Cover Database",
+      "sourceUrl": "https://www.mpi.govt.nz/forestry/forest-industry-and-workforce/forestry-wood-processing-data/new-zealand-forest-data",
+      "lowLabel": "Lower cover",
+      "highLabel": "Higher cover",
+      "pipeline": "forestry_cover",
+      "invertGood": false,
+      "inflationAdjustable": false,
+      "values": {
+        "auckland": [
+          18.0,
+          18.0,
+          18.0,
+          17.0,
+          17.0,
+          17.0
+        ],
+        "bay-of-plenty": [
+          35.0,
+          36.0,
+          37.0,
+          38.0,
+          39.0,
+          40.0
+        ],
+        "canterbury": [
+          15.0,
+          15.0,
+          16.0,
+          16.0,
+          17.0,
+          17.0
+        ],
+        "gisborne": [
+          38.0,
+          40.0,
+          42.0,
+          45.0,
+          48.0,
+          51.0
+        ],
+        "hawkes-bay": [
+          23.0,
+          24.0,
+          25.0,
+          27.0,
+          29.0,
+          31.0
+        ],
+        "manawatu-whanganui": [
+          24.0,
+          25.0,
+          26.0,
+          28.0,
+          30.0,
+          32.0
+        ],
+        "marlborough": [
+          26.0,
+          27.0,
+          28.0,
+          30.0,
+          32.0,
+          34.0
+        ],
+        "nelson": [
+          37.0,
+          37.0,
+          38.0,
+          38.0,
+          39.0,
+          39.0
+        ],
+        "northland": [
+          29.0,
+          30.0,
+          31.0,
+          32.0,
+          33.0,
+          34.0
+        ],
+        "otago": [
+          19.0,
+          19.0,
+          20.0,
+          21.0,
+          22.0,
+          23.0
+        ],
+        "southland": [
+          20.0,
+          20.0,
+          21.0,
+          21.0,
+          22.0,
+          23.0
+        ],
+        "taranaki": [
+          21.0,
+          21.0,
+          22.0,
+          22.0,
+          23.0,
+          23.0
+        ],
+        "tasman": [
+          55.0,
+          55.0,
+          56.0,
+          56.0,
+          57.0,
+          57.0
+        ],
+        "waikato": [
+          25.0,
+          26.0,
+          27.0,
+          28.0,
+          29.0,
+          30.0
+        ],
+        "wellington": [
+          28.0,
+          28.0,
+          29.0,
+          29.0,
+          30.0,
+          30.0
+        ],
+        "west-coast": [
+          74.0,
+          74.0,
+          75.0,
+          75.0,
+          76.0,
+          76.0
+        ]
+      }
+    },
     "climatePressure": {
       "label": "Climate pressure",
       "shortLabel": "Climate",
@@ -24994,7 +25138,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "source",
       "note": "Loaded Stats NZ regional council boundaries and simplified them for browser rendering.",
       "rowCount": 16,
-      "createdAt": "2026-05-21 12:59:56"
+      "createdAt": "2026-05-21 13:07:12"
     },
     {
       "pipeline": "housing_affordability",
@@ -25002,7 +25146,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: join MHUD local housing statistics with income data and Stats NZ CPI.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 12:59:56"
+      "createdAt": "2026-05-21 13:07:12"
     },
     {
       "pipeline": "stats_nz_population",
@@ -25010,7 +25154,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: Stats NZ API population estimates by region and census years.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 12:59:56"
+      "createdAt": "2026-05-21 13:07:12"
     },
     {
       "pipeline": "broadband_rollout",
@@ -25018,7 +25162,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: Crown Infrastructure Partners broadband rollout tables by coverage area.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 12:59:56"
+      "createdAt": "2026-05-21 13:07:12"
     },
     {
       "pipeline": "rsm_cell_sites",
@@ -25026,7 +25170,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: RSM licence/site records aggregated to regions.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 12:59:56"
+      "createdAt": "2026-05-21 13:07:12"
     },
     {
       "pipeline": "stats_nz_workplace",
@@ -25034,7 +25178,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: census workplace address and commuting flow tables.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 12:59:56"
+      "createdAt": "2026-05-21 13:07:12"
     },
     {
       "pipeline": "land_cover_database",
@@ -25042,7 +25186,15 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: LCDB versions grouped into productive land-cover classes.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 12:59:56"
+      "createdAt": "2026-05-21 13:07:12"
+    },
+    {
+      "pipeline": "forestry_cover",
+      "sourceUrl": "https://www.mpi.govt.nz/forestry/forest-industry-and-workforce/forestry-wood-processing-data/new-zealand-forest-data",
+      "mode": "seed",
+      "note": "Seeded now. Target: combine MPI National Exotic Forest Description regional tables with LCDB forest classes over time.",
+      "rowCount": 96,
+      "createdAt": "2026-05-21 13:07:12"
     },
     {
       "pipeline": "climate_pressure",
@@ -25050,7 +25202,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: MfE, NIWA, and council hazard layers composited by region.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 12:59:56"
+      "createdAt": "2026-05-21 13:07:12"
     },
     {
       "pipeline": "electoral_commission_results",
@@ -25058,7 +25210,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: Electoral Commission party vote by electorate mapped to regions.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 12:59:56"
+      "createdAt": "2026-05-21 13:07:12"
     }
   ]
 };

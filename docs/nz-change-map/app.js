@@ -31,6 +31,7 @@ const DATASET_EXPLAINERS = {
   cellTowers: "This is an index of mobile site density and coverage pressure. It helps highlight where mobile infrastructure has been concentrated over time.",
   work: "This compares where work is concentrating relative to where people live. Higher values point to job hubs and commuting pressure.",
   farmland: "This estimates the share of land used for pasture, crops, and other productive rural cover. Falling values can indicate urban edge pressure, forestry conversion, or land-use change.",
+  forestry: "This tracks regional forest cover, including indigenous forest, planted production forest, and land converted into woodlots or plantation blocks. It is designed to combine MPI forestry tables with LCDB satellite land-cover snapshots.",
   climatePressure: "This composite is designed to combine coastal exposure, flood, heat, drought, and severe-weather risk indicators into a regional pressure score.",
   politics: "This index is a simplified view of regional party-vote position over time. Lower values lean centre-left in this prototype; higher values lean centre-right."
 };
