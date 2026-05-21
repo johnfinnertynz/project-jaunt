@@ -6,7 +6,7 @@
     <title>NZ Change Map</title>
     <meta
       name="description"
-      content="An interactive satellite time-map prototype for exploring how New Zealand changes over time across housing affordability, population density, fibre rollout, cell towers, workplace patterns, forestry, and land cover."
+      content="An interactive satellite time-map prototype for exploring how New Zealand changes over time across housing affordability, population density, fibre rollout, cell towers, forestry, crime, demographics, and land cover."
     >
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://johnfinnertynz.github.io/project-jaunt/nz-change-map/">
@@ -27,6 +27,23 @@
           <div class="metric-card">
             <span id="metric-label">Selected year</span>
             <strong id="metric-value">2025</strong>
+          </div>
+          <div class="insight-grid" aria-label="Dataset highlights">
+            <div>
+              <span>Highest</span>
+              <strong id="insight-high">-</strong>
+              <small id="insight-high-value"></small>
+            </div>
+            <div>
+              <span>Lowest</span>
+              <strong id="insight-low">-</strong>
+              <small id="insight-low-value"></small>
+            </div>
+            <div>
+              <span>Biggest move</span>
+              <strong id="insight-change">-</strong>
+              <small id="insight-change-value"></small>
+            </div>
           </div>
           <div id="inflation-control" class="toggle-row">
             <label>
@@ -50,7 +67,7 @@
       </section>
 
       <section class="control-deck" aria-label="Timeline and dataset controls">
-        <div class="dataset-tabs" id="dataset-tabs"></div>
+        <div class="dataset-tabs" id="dataset-tabs" role="tablist" aria-label="Map datasets"></div>
         <div class="timeline-row">
           <span id="year-min">2000</span>
           <input id="year-slider" type="range" min="2000" max="2025" step="5" value="2025">

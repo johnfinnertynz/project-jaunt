@@ -219,6 +219,13 @@ function adjustedValue(regionId) {
   return value / cpiRealTermsFactor;
 }
 
+function adjustedFirstValue(regionId) {
+  const dataset = currentDataset();
+  const value = (dataset.values[regionId] || [rawValue(regionId)])[0];
+  if (state.dataset !== "affordability" || !state.inflationAdjusted) return value;
+  return value / 1.76;
+}
+
 function datasetValues() {
   return REGIONS.map((region) => adjustedValue(region.id));
 }
@@ -270,12 +277,40 @@ function formatDelta(delta) {
   return `${sign}${Math.round(delta)} ${dataset.unit}`;
 }
 
+function regionStats(values) {
+  return REGIONS.map((region, index) => {
+    const value = values[index];
+    const delta = value - adjustedFirstValue(region.id);
+    return { region, value, delta };
+  });
+}
+
+function labelRegionIds(values) {
+  const stats = regionStats(values);
+  const candidates = [
+    ...[...stats].sort((left, right) => right.value - left.value).slice(0, 4),
+    ...[...stats].sort((left, right) => left.value - right.value).slice(0, 4)
+  ];
+  const used = [];
+  const labels = new Set();
+
+  for (const item of candidates) {
+    if (labels.has(item.region.id)) continue;
+    const point = map.latLngToContainerPoint(item.region.coords);
+    const collides = used.some((other) => Math.abs(other.x - point.x) < 86 && Math.abs(other.y - point.y) < 34);
+    if (collides) continue;
+    used.push(point);
+    labels.add(item.region.id);
+    if (labels.size >= 6) break;
+  }
+
+  return labels;
+}
+
 function popupContent(region, label, values) {
   const dataset = currentDataset();
   const value = adjustedValue(region.id);
-  const firstValue = state.dataset === "affordability" && state.inflationAdjusted
-    ? rawValue(region.id) / 1.76
-    : (dataset.values[region.id] || [value])[0];
+  const firstValue = adjustedFirstValue(region.id);
   const nationalMean = values.reduce((sum, item) => sum + item, 0) / values.length;
   const rank = regionRank(region.id, values);
   const areaLine = region.landAreaSqKm
@@ -320,6 +355,7 @@ function renderTabs() {
     button.type = "button";
     button.className = "dataset-tab";
     button.textContent = dataset.shortLabel;
+    button.setAttribute("role", "tab");
     button.setAttribute("aria-selected", String(id === state.dataset));
     button.addEventListener("click", () => {
       state.dataset = id;
@@ -358,6 +394,7 @@ function renderRegions() {
   const values = datasetValues();
   const min = Math.min(...values);
   const max = Math.max(...values);
+  const labelled = labelRegionIds(values);
 
   for (const region of REGIONS) {
     const value = adjustedValue(region.id);
@@ -379,22 +416,40 @@ function renderRegions() {
     polygon.on("mouseover", () => polygon.setStyle({ fillOpacity: 0.56, weight: 2.8 }));
     polygon.on("mouseout", () => polygon.setStyle({ fillOpacity: 0.36, weight: 1.35 }));
 
-    const labelIcon = L.divIcon({
-      className: "region-label-marker",
-      html: `<div class="region-label">${region.name}<br>${label}</div>`,
-      iconSize: [128, 38],
-      iconAnchor: [64, 19]
-    });
+    state.layers.push(polygon);
 
-    const textMarker = L.marker(region.coords, {
-      icon: labelIcon,
-      interactive: false
-    }).addTo(map);
+    if (labelled.has(region.id)) {
+      const labelIcon = L.divIcon({
+        className: "region-label-marker",
+        html: `<div class="region-label">${region.name}<br>${label}</div>`,
+        iconSize: [128, 38],
+        iconAnchor: [64, 19]
+      });
 
-    state.layers.push(polygon, textMarker);
+      const textMarker = L.marker(region.coords, {
+        icon: labelIcon,
+        interactive: false
+      }).addTo(map);
+
+      state.layers.push(textMarker);
+    }
   }
 
   renderPointFeatures();
+}
+
+function renderInsights(values) {
+  const stats = regionStats(values);
+  const highest = [...stats].sort((left, right) => right.value - left.value)[0];
+  const lowest = [...stats].sort((left, right) => left.value - right.value)[0];
+  const mover = [...stats].sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))[0];
+
+  document.getElementById("insight-high").textContent = highest.region.name;
+  document.getElementById("insight-high-value").textContent = formatValue(highest.value);
+  document.getElementById("insight-low").textContent = lowest.region.name;
+  document.getElementById("insight-low-value").textContent = formatValue(lowest.value);
+  document.getElementById("insight-change").textContent = mover.region.name;
+  document.getElementById("insight-change-value").textContent = formatDelta(mover.delta);
 }
 
 function renderInspector() {
@@ -419,6 +474,7 @@ function renderInspector() {
 
   const nationalMean = values.reduce((sum, value) => sum + value, 0) / values.length;
   document.getElementById("metric-value").textContent = `${state.year} - NZ avg ${formatValue(nationalMean)}`;
+  renderInsights(values);
 }
 
 function render() {
