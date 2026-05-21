@@ -237,6 +237,21 @@ h2 {
   text-align: left;
 }
 
+.dataset-tab:hover,
+.radio-card:hover,
+.info-card a:hover,
+.radio-source a:hover {
+  border-color: rgba(56, 189, 248, 0.68);
+}
+
+.dataset-tab:focus-visible,
+.radio-card:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .dataset-tab[aria-selected="true"] {
   border-color: rgba(56, 189, 248, 0.84);
   color: var(--ink);
@@ -283,6 +298,8 @@ input[type="range"] {
   border: 0;
   background: transparent;
   box-shadow: none;
+  width: 128px;
+  height: 38px;
 }
 
 .info-section {
@@ -526,9 +543,11 @@ input[type="range"] {
   .inspector {
     top: auto;
     right: 12px;
-    bottom: 14px;
+    bottom: 150px;
     left: 12px;
     width: auto;
+    max-height: calc(100vh - 250px);
+    overflow: auto;
   }
 
   .dataset-tabs {

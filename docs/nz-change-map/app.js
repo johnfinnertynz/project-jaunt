@@ -226,7 +226,9 @@ function renderRegions() {
 
     const labelIcon = L.divIcon({
       className: "region-label-marker",
-      html: `<div class="region-label">${region.name}<br>${label}</div>`
+      html: `<div class="region-label">${region.name}<br>${label}</div>`,
+      iconSize: [128, 38],
+      iconAnchor: [64, 19]
     });
 
     const textMarker = L.marker(region.coords, {
