@@ -256,6 +256,14 @@
       .filter((request) => isVideoDeliveryHost(request.host || parseCdnHost(request.url)));
   }
 
+  function getPrimaryDeliveryType(stats) {
+    const entries = Object.entries(stats.deliveryTypes || {});
+    if (!entries.length) return stats.lastDeliveryType || "unknown";
+
+    return entries
+      .sort(([, a], [, b]) => b - a)[0][0];
+  }
+
   function summarizeHostStats(host, stats = null) {
     const source = stats || state.network.cdnHosts?.[host] || {};
     const count = source.count || 0;
@@ -490,6 +498,7 @@
               <thead>
                 <tr>
                   <th>Host</th>
+                  <th>Serving</th>
                   <th>Count</th>
                   <th>Last</th>
                   <th>Status</th>
@@ -749,6 +758,7 @@
       .map(([host, stats]) => `
         <tr>
           <td>${host}</td>
+          <td>${getPrimaryDeliveryType(stats)}</td>
           <td>${stats.count || 0}</td>
           <td>${fmtMs(stats.lastMs)}</td>
           <td>${stats.lastStatus || stats.error || "n/a"}</td>
@@ -756,7 +766,7 @@
       `)
       .join("");
 
-    table.innerHTML = rows || `<tr><td colspan="4" class="tdc-muted">Waiting for Twitch media requests...</td></tr>`;
+    table.innerHTML = rows || `<tr><td colspan="5" class="tdc-muted">Waiting for Twitch media requests...</td></tr>`;
   }
 
   function fmtDelta(value) {

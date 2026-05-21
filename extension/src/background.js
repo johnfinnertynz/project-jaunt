@@ -106,6 +106,27 @@ function isVideoDeliveryHost(host) {
     );
 }
 
+function classifyDelivery(url, resourceType = "") {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "unknown";
+  }
+
+  const path = parsed.pathname.toLowerCase();
+  const query = parsed.search.toLowerCase();
+  const full = `${path}${query}`;
+
+  if (path.endsWith(".m3u8")) return "playlist";
+  if (full.includes("ad") || full.includes("stitched") || full.includes("ssai")) return "ad media";
+  if (path.endsWith(".ts") || path.endsWith(".m4s") || path.includes("/segment/")) return "video segment";
+  if (path.includes("/hls/")) return "hls media";
+  if (path.includes("/vod/")) return "vod media";
+  if (resourceType === "media") return "media";
+  return "video delivery";
+}
+
 async function readAvoidedCdns() {
   const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), CDN_RULE_STORAGE_KEY);
   return result?.[CDN_RULE_STORAGE_KEY] || {};
@@ -214,19 +235,25 @@ function rememberRequest(tabId, sample) {
     count: 0,
     failures: 0,
     totalMs: 0,
+    deliveryTypes: {},
     lastStatus: null,
     lastUrl: null,
+    lastDeliveryType: null,
     lastMs: null,
     lastSeen: null
   };
+  const deliveryType = sample.deliveryType || classifyDelivery(sample.url, sample.type);
 
   hostState.count += 1;
   hostState.failures += sample.ok ? 0 : 1;
   hostState.totalMs += sample.durationMs;
+  hostState.deliveryTypes[deliveryType] = (hostState.deliveryTypes[deliveryType] || 0) + 1;
   hostState.lastStatus = sample.statusCode || null;
   hostState.lastUrl = sample.url;
+  hostState.lastDeliveryType = deliveryType;
   hostState.lastMs = sample.durationMs;
   hostState.lastSeen = sample.endedAt;
+  sample.deliveryType = deliveryType;
 
   state.cdnHosts[sample.host] = hostState;
   state.recentRequests.unshift(sample);
