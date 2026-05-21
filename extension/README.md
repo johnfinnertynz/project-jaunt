@@ -34,6 +34,8 @@ It does not attempt to modify Twitch playback, change CDNs, proxy traffic, or by
 
 Temporary Firefox add-ons are removed when the browser restarts. For permanent install, package and sign the extension through Mozilla Add-ons.
 
+The published Firefox package targets Firefox 142 or newer so Mozilla can show the built-in "no data collected" disclosure at install time.
+
 ## Privacy
 
 The add-on stores diagnostics locally in memory while the Twitch tab is open. It does not send diagnostics anywhere. JSON exports are created only when the user clicks copy or download.

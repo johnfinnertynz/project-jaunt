@@ -420,9 +420,34 @@
   function renderChart(svg, samples, key, color, maxHint = null) {
     if (!svg) return;
     const path = chartPath(samples, key, maxHint);
-    svg.innerHTML = path
-      ? `<line x1="0" y1="68" x2="220" y2="68" class="tdc-chart-axis"></line><path d="${path}" fill="none" stroke="${color}" stroke-width="2.4" vector-effect="non-scaling-stroke"></path>`
-      : `<text x="110" y="39" text-anchor="middle" class="tdc-chart-empty">waiting</text>`;
+    svg.replaceChildren();
+
+    if (!path) {
+      const empty = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      empty.setAttribute("x", "110");
+      empty.setAttribute("y", "39");
+      empty.setAttribute("text-anchor", "middle");
+      empty.setAttribute("class", "tdc-chart-empty");
+      empty.textContent = "waiting";
+      svg.appendChild(empty);
+      return;
+    }
+
+    const axis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    axis.setAttribute("x1", "0");
+    axis.setAttribute("y1", "68");
+    axis.setAttribute("x2", "220");
+    axis.setAttribute("y2", "68");
+    axis.setAttribute("class", "tdc-chart-axis");
+
+    const trend = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    trend.setAttribute("d", path);
+    trend.setAttribute("fill", "none");
+    trend.setAttribute("stroke", color);
+    trend.setAttribute("stroke-width", "2.4");
+    trend.setAttribute("vector-effect", "non-scaling-stroke");
+
+    svg.append(axis, trend);
   }
 
   function formatChartValue(value, unit) {
@@ -477,21 +502,38 @@
     const table = root.querySelector("[data-cdn-table]");
     if (!table) return;
 
-    const rows = Object.entries(diagnostics.cdn.hosts)
-      .sort(([, a], [, b]) => (b.count || 0) - (a.count || 0))
-      .slice(0, 10)
-      .map(([host, stats]) => `
-        <tr>
-          <td>${host}</td>
-          <td>${getPrimaryDeliveryType(stats)}</td>
-          <td>${stats.count || 0}</td>
-          <td>${fmtMs(stats.lastMs)}</td>
-          <td>${stats.lastStatus || stats.error || "n/a"}</td>
-        </tr>
-      `)
-      .join("");
+    table.replaceChildren();
 
-    table.innerHTML = rows || `<tr><td colspan="5" class="tdc-muted">Waiting for Twitch video CDN requests...</td></tr>`;
+    const entries = Object.entries(diagnostics.cdn.hosts)
+      .sort(([, a], [, b]) => (b.count || 0) - (a.count || 0))
+      .slice(0, 10);
+
+    if (!entries.length) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 5;
+      cell.className = "tdc-muted";
+      cell.textContent = "Waiting for Twitch video CDN requests...";
+      row.appendChild(cell);
+      table.appendChild(row);
+      return;
+    }
+
+    for (const [host, stats] of entries) {
+      const row = document.createElement("tr");
+      for (const value of [
+        host,
+        getPrimaryDeliveryType(stats),
+        String(stats.count || 0),
+        fmtMs(stats.lastMs),
+        String(stats.lastStatus || stats.error || "n/a")
+      ]) {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.appendChild(cell);
+      }
+      table.appendChild(row);
+    }
   }
 
   function setText(root, selector, value) {
