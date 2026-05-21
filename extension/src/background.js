@@ -353,40 +353,55 @@ api.tabs.onRemoved.addListener((tabId) => {
   tabDiagnostics.delete(tabId);
 });
 
-api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+async function handleRuntimeMessage(message, sender) {
   if (message?.type === "TWITCH_DIAGNOSTICS_GET_NETWORK") {
-    readAvoidedCdns()
-      .then((avoidedCdns) => {
-        sendResponse({
-          ...getTabState(sender.tab?.id ?? -1),
-          avoidedCdns
-        });
-      })
-      .catch((error) => {
-        sendResponse({
-          ...getTabState(sender.tab?.id ?? -1),
-          avoidedCdns: {},
-          error: error.message
-        });
-      });
-    return true;
+    try {
+      const avoidedCdns = await readAvoidedCdns();
+      return {
+        ...getTabState(sender.tab?.id ?? -1),
+        avoidedCdns
+      };
+    } catch (error) {
+      return {
+        ...getTabState(sender.tab?.id ?? -1),
+        avoidedCdns: {},
+        error: error.message
+      };
+    }
   }
 
   if (message?.type === "TWITCH_DIAGNOSTICS_AVOID_CDN") {
-    applyAvoidedCdnRule(message.host, message.minutes)
-      .then((rule) => sendResponse({ ok: true, rule }))
-      .catch((error) => sendResponse({ ok: false, error: error.message }));
-    return true;
+    try {
+      const rule = await applyAvoidedCdnRule(message.host, message.minutes);
+      return { ok: true, rule };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
   }
 
   if (message?.type === "TWITCH_DIAGNOSTICS_CLEAR_AVOIDED_CDNS") {
-    clearAvoidedCdn(message.host || null)
-      .then((avoidedCdns) => sendResponse({ ok: true, avoidedCdns }))
-      .catch((error) => sendResponse({ ok: false, error: error.message }));
-    return true;
+    try {
+      const avoidedCdns = await clearAvoidedCdn(message.host || null);
+      return { ok: true, avoidedCdns };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
   }
 
-  return false;
+  return null;
+}
+
+api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const responsePromise = handleRuntimeMessage(message, sender);
+
+  if (globalThis.browser) {
+    return responsePromise;
+  }
+
+  responsePromise.then((response) => {
+    if (response !== null) sendResponse(response);
+  });
+  return true;
 });
 
 if (api.alarms?.onAlarm) {

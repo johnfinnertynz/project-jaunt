@@ -13,7 +13,8 @@
     probeSamples: [],
     logs: [],
     pendingSwitch: null,
-    switchHistory: []
+    switchHistory: [],
+    streamKey: ""
   };
 
   const SELECTORS = {
@@ -118,6 +119,50 @@
     const now = new Date();
     state.logs.unshift(`[${now.toLocaleTimeString()}] ${message}`);
     state.logs = state.logs.slice(0, 80);
+  }
+
+  function getStreamKey() {
+    const path = location.pathname.replace(/\/+$/, "") || "/";
+    const parts = path.split("/").filter(Boolean);
+
+    if (parts[0] === "videos" && parts[1]) return `vod:${parts[1]}`;
+    if (parts[0] === "directory") return `directory:${location.pathname}`;
+    if (parts[0]) return `channel:${parts[0].toLowerCase()}`;
+    return "home";
+  }
+
+  function clearSessionDiagnostics(reason) {
+    state.network = {
+      ...state.network,
+      cdnHosts: {},
+      recentRequests: []
+    };
+    state.perfSeen = new Set();
+    state.perfSamples = [];
+    state.probeSamples = [];
+    state.pendingSwitch = null;
+    state.switchHistory = [];
+    saveSwitchState();
+
+    const input = document.querySelector("#twitch-diagnostics-console [data-cdn-input]");
+    if (input) input.value = "";
+
+    addLog(reason);
+  }
+
+  function detectStreamChange() {
+    const nextKey = getStreamKey();
+    if (!state.streamKey) {
+      state.streamKey = nextKey;
+      return;
+    }
+
+    if (state.streamKey === nextKey) return;
+
+    const previousKey = state.streamKey;
+    state.streamKey = nextKey;
+    clearSessionDiagnostics(`Stream changed from ${previousKey} to ${nextKey}; cleared CDN diagnostics.`);
+    render();
   }
 
   function loadSwitchState() {
@@ -927,6 +972,31 @@
     });
   }
 
+  function installStreamChangeWatcher() {
+    state.streamKey = getStreamKey();
+
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function pushState(...args) {
+      const result = originalPushState.apply(this, args);
+      window.setTimeout(detectStreamChange, 0);
+      return result;
+    };
+
+    history.replaceState = function replaceState(...args) {
+      const result = originalReplaceState.apply(this, args);
+      window.setTimeout(detectStreamChange, 0);
+      return result;
+    };
+
+    window.addEventListener("popstate", () => {
+      window.setTimeout(detectStreamChange, 0);
+    });
+
+    window.setInterval(detectStreamChange, 1500);
+  }
+
   document.addEventListener("keydown", (event) => {
     if (event.altKey && event.shiftKey && event.key.toLowerCase() === "d") {
       event.preventDefault();
@@ -938,5 +1008,6 @@
   loadSwitchState();
   createPanel();
   connectBackground();
+  installStreamChangeWatcher();
   window.setInterval(render, 1000);
 })();
