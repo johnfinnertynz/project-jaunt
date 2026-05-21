@@ -42,6 +42,8 @@ function getTabState(tabId) {
     tabDiagnostics.set(tabId, {
       cdnHosts: {},
       recentRequests: [],
+      playlistUrls: [],
+      allocatorHosts: {},
       lastUpdated: Date.now()
     });
   }
@@ -142,6 +144,123 @@ function getContentLength(headers = []) {
   const value = getHeaderValue(headers, "content-length");
   const parsed = Number.parseInt(value || "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function isPlaylistUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    return path.endsWith(".m3u8") || path.includes("/api/channel/hls/");
+  } catch {
+    return false;
+  }
+}
+
+function extractVideoHostsFromText(text) {
+  const hosts = new Set();
+  const matches = text.match(/https?:\/\/([^/\s"']+)/g) || [];
+
+  for (const match of matches) {
+    try {
+      const host = new URL(match).hostname.toLowerCase();
+      if (isVideoDeliveryHost(host)) hosts.add(host);
+    } catch {
+      // Ignore malformed URLs inside comments or tags.
+    }
+  }
+
+  return [...hosts];
+}
+
+function rememberPlaylistUrl(tabId, url) {
+  if (tabId < 0 || !isPlaylistUrl(url)) return;
+
+  const state = getTabState(tabId);
+  state.playlistUrls = [
+    url,
+    ...state.playlistUrls.filter((item) => item !== url)
+  ].slice(0, 8);
+  state.lastUpdated = Date.now();
+}
+
+function rememberAllocatorHosts(tabId, hosts, sourceUrl) {
+  if (tabId < 0 || !hosts.length) return;
+
+  const state = getTabState(tabId);
+
+  for (const host of hosts) {
+    const current = state.allocatorHosts[host] || {
+      host,
+      count: 0,
+      lastSeen: null,
+      sourceUrl: null
+    };
+    current.count += 1;
+    current.lastSeen = Date.now();
+    current.sourceUrl = sourceUrl;
+    state.allocatorHosts[host] = current;
+  }
+
+  state.lastUpdated = Date.now();
+}
+
+function cacheBustUrl(url, index) {
+  const parsed = new URL(url);
+  parsed.searchParams.set("_tdc_probe", `${Date.now()}_${index}`);
+  return parsed.toString();
+}
+
+async function samplePlaylistAllocator(tabId) {
+  const state = getTabState(tabId);
+  const urls = state.playlistUrls.slice(0, 3);
+
+  if (!urls.length) {
+    return {
+      ok: false,
+      error: "No Twitch playlist URL has been captured yet. Let the stream run for a few seconds."
+    };
+  }
+
+  const foundHosts = new Set();
+  const samples = [];
+
+  for (const url of urls) {
+    for (let i = 0; i < 4; i += 1) {
+      const startedAt = Date.now();
+      try {
+        const response = await fetch(cacheBustUrl(url, i), {
+          cache: "no-store",
+          credentials: "include"
+        });
+        const text = await response.text();
+        const hosts = extractVideoHostsFromText(text);
+        hosts.forEach((host) => foundHosts.add(host));
+        rememberAllocatorHosts(tabId, hosts, url);
+        samples.push({
+          url,
+          ok: response.ok,
+          status: response.status,
+          hosts,
+          durationMs: Date.now() - startedAt
+        });
+      } catch (error) {
+        samples.push({
+          url,
+          ok: false,
+          error: error.message,
+          hosts: [],
+          durationMs: Date.now() - startedAt
+        });
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    hosts: [...foundHosts],
+    samples,
+    allocatorHosts: getTabState(tabId).allocatorHosts
+  };
 }
 
 async function readAvoidedCdns() {
@@ -508,6 +627,8 @@ function rememberRequest(tabId, sample) {
     payload: {
       cdnHosts: state.cdnHosts,
       recentRequests: state.recentRequests,
+      playlistUrls: state.playlistUrls,
+      allocatorHosts: state.allocatorHosts,
       lastUpdated: state.lastUpdated
     }
   });
@@ -543,6 +664,7 @@ api.webRequest.onCompleted.addListener(
     if (!start || !isTwitchMediaUrl(details.url)) return;
 
     const parsed = new URL(details.url);
+    rememberPlaylistUrl(details.tabId, details.url);
     rememberRequest(details.tabId, {
       url: details.url,
       host: parsed.hostname,
@@ -694,6 +816,10 @@ async function handleRuntimeMessage(message, sender) {
     } catch (error) {
       return { ok: false, error: error.message };
     }
+  }
+
+  if (message?.type === "TWITCH_DIAGNOSTICS_SAMPLE_PLAYLIST_ALLOCATOR") {
+    return await samplePlaylistAllocator(sender.tab?.id ?? -1);
   }
 
   return null;

@@ -8,6 +8,8 @@
       recentRequests: [],
       avoidedCdns: {},
       cdnRedirect: null,
+      allocatorHosts: {},
+      playlistUrls: [],
       playlistRewrite: null
     },
     perfSeen: new Set(),
@@ -343,7 +345,7 @@
   }
 
   function getBestRedirectTarget(fromHost) {
-    return Object.entries(getVideoCdnHosts())
+    const observedTargets = Object.entries(getVideoCdnHosts())
       .filter(([host, stats]) => host !== fromHost && (stats.count || 0) > 0)
       .map(([host, stats]) => ({
         host,
@@ -355,6 +357,22 @@
       .sort((a, b) => {
         const aSegment = a.serving === "video segment" ? 0 : 1;
         const bSegment = b.serving === "video segment" ? 0 : 1;
+        return aSegment - bSegment || a.avgMs - b.avgMs || b.count - a.count;
+      });
+    const allocatorTargets = Object.values(state.network.allocatorHosts || {})
+      .filter((item) => item.host !== fromHost && isVideoDeliveryHost(item.host))
+      .map((item) => ({
+        host: item.host,
+        avgMs: Number.POSITIVE_INFINITY,
+        lastMs: Number.POSITIVE_INFINITY,
+        count: item.count || 0,
+        serving: "allocator"
+      }));
+
+    return [...observedTargets, ...allocatorTargets]
+      .sort((a, b) => {
+        const aSegment = a.serving === "video segment" ? 0 : a.serving === "allocator" ? 1 : 2;
+        const bSegment = b.serving === "video segment" ? 0 : b.serving === "allocator" ? 1 : 2;
         return aSegment - bSegment || a.avgMs - b.avgMs || b.count - a.count;
       })[0]?.host || "";
   }
@@ -587,6 +605,7 @@
         </div>
         <div class="tdc-tools">
           <button class="tdc-button" type="button" data-probe>Probe CDN</button>
+          <button class="tdc-button" type="button" data-discover-alternates>Discover Alternatives</button>
           <button class="tdc-button tdc-danger" type="button" data-rewrite-playlist>Rewrite Playlist CDN</button>
           <button class="tdc-button" type="button" data-clear-rewrite>Clear Rewrite</button>
           <button class="tdc-button" type="button" data-toggle-graphs>Show Graphs</button>
@@ -597,6 +616,10 @@
         <div class="tdc-card" style="margin-top: 8px;">
           <div class="tdc-label">Active Playlist Rewrite</div>
           <div class="tdc-value" data-playlist-rewrite>none</div>
+        </div>
+        <div class="tdc-card" style="margin-top: 8px;">
+          <div class="tdc-label">Discovered Playlist Hosts</div>
+          <div class="tdc-value" data-allocator-hosts>none</div>
         </div>
         <div class="tdc-card" style="margin-top: 8px;">
           <div class="tdc-label">CDN Switch Comparison</div>
@@ -715,6 +738,11 @@
 
     root.querySelector("[data-rewrite-playlist]").addEventListener("click", async () => {
       await rewritePlaylistCdn();
+    });
+
+    root.querySelector("[data-discover-alternates]").addEventListener("click", async () => {
+      await discoverAlternates();
+      render();
     });
 
     root.querySelector("[data-clear-rewrite]").addEventListener("click", async () => {
@@ -941,6 +969,7 @@
 
     if (!toHost) {
       addLog("No alternate video CDN observed yet. The playlist rewriter needs a second HLS host to target.");
+      addLog("Try Discover Alternatives after playback has captured a playlist URL.");
       render();
       return;
     }
@@ -984,6 +1013,24 @@
 
     state.network.playlistRewrite = null;
     addLog("Cleared active playlist rewrite.");
+  }
+
+  async function discoverAlternates() {
+    addLog("Sampling captured Twitch playlist URLs for alternate HLS hosts...");
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_SAMPLE_PLAYLIST_ALLOCATOR"
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not sample playlist allocator: ${response?.error || "unknown error"}`);
+      return;
+    }
+
+    state.network.allocatorHosts = response.allocatorHosts || {};
+    const hosts = response.hosts || [];
+    addLog(hosts.length
+      ? `Allocator probe found ${hosts.length} video host(s): ${hosts.join(", ")}`
+      : "Allocator probe completed but did not find any video hosts in playlist responses.");
   }
 
   async function avoidSpecificCdn(input) {
@@ -1207,6 +1254,7 @@
     setText(root, "[data-cdn]", cdnHost);
     setText(root, "[data-cdn-edge]", formatEdgeDetails(diagnostics.cdn.edge));
     setText(root, "[data-playlist-rewrite]", formatPlaylistRewrite(diagnostics.cdn.playlistRewrite));
+    setText(root, "[data-allocator-hosts]", formatAllocatorHosts(state.network.allocatorHosts));
     setText(root, "[data-latency]", fmtSeconds(diagnostics.playback.liveLatency));
     setText(root, "[data-drops]", diagnostics.playback.totalVideoFrames ? `${diagnostics.playback.droppedVideoFrames} / ${diagnostics.playback.droppedFramePercent}%` : "n/a");
     setText(root, "[data-throughput]", fmtBitrate(diagnostics.performance.estimatedRecentThroughput));
@@ -1246,6 +1294,16 @@
     return `${rewrite.fromHost} -> ${rewrite.toHost} (${count} urls rewritten)`;
   }
 
+  function formatAllocatorHosts(hosts) {
+    const entries = Object.values(hosts || {});
+    if (!entries.length) return "none";
+
+    return entries
+      .sort((a, b) => (b.count || 0) - (a.count || 0))
+      .map((entry) => `${entry.host} (${entry.count})`)
+      .join(", ");
+  }
+
   function formatEdgeDetails(edge) {
     if (!edge?.host || edge.host === "n/a") return "n/a";
     return `${edge.provider} / ${edge.role} / edge ${edge.edgeId} / region ${edge.region}`;
@@ -1261,6 +1319,8 @@
           ...response,
           avoidedCdns: response.avoidedCdns || {},
           cdnRedirect: response.cdnRedirect || null,
+          allocatorHosts: response.allocatorHosts || {},
+          playlistUrls: response.playlistUrls || [],
           playlistRewrite: response.playlistRewrite || null
         };
         render();
@@ -1274,6 +1334,8 @@
                 ...response,
                 avoidedCdns: response.avoidedCdns || {},
                 cdnRedirect: response.cdnRedirect || null,
+                allocatorHosts: response.allocatorHosts || {},
+                playlistUrls: response.playlistUrls || [],
                 playlistRewrite: response.playlistRewrite || null
               };
               render();
@@ -1295,6 +1357,8 @@
           ...message.payload,
           avoidedCdns: state.network.avoidedCdns || {},
           cdnRedirect: state.network.cdnRedirect || null,
+          allocatorHosts: message.payload.allocatorHosts || state.network.allocatorHosts || {},
+          playlistUrls: message.payload.playlistUrls || state.network.playlistUrls || [],
           playlistRewrite: state.network.playlistRewrite || null
         };
         render();
