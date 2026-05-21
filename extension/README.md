@@ -8,8 +8,7 @@ Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox
 - connected CDN host detection from media requests and performance entries
 - CDN request duration, last status, request count, and failure tracking
 - manual CDN probe timing
-- temporary CDN avoid rules to force Twitch to renegotiate a different edge
-- experimental CDN redirect rules that map a slow observed HLS host to another observed HLS host
+- Firefox-only playlist response rewriting that maps a slow observed HLS host to another observed HLS host
 - old-vs-new CDN comparison after forcing a reconnect
 - manual segment URL or CDN host input for exact failover targeting
 - live latency estimate when Twitch exposes seekable live ranges
@@ -36,23 +35,18 @@ Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox
 
 Temporary Firefox add-ons are removed when the browser restarts. For permanent install, package and sign the extension through Mozilla Add-ons.
 
-## Forcing A New CDN
+## Rewriting A Playlist CDN
 
-Twitch controls CDN selection internally, so the extension cannot directly choose a specific edge server. The reliable workaround is:
+Twitch controls CDN selection internally, so the extension cannot directly choose a specific edge server. The strongest browser-only Firefox workaround is playlist rewriting:
 
 1. Let playback run until the console detects the active CDN.
-2. Click **Renegotiate CDN**.
+2. Wait until the CDN table shows a second video delivery host.
+3. Click **Rewrite Playlist CDN**.
 3. The extension snapshots the old CDN's request count, average response time, latest response time, and failures.
-4. The extension clears temporary CDN blocks and reloads Twitch so the player asks for a fresh playlist.
-5. The **CDN Switch Comparison** section shows old-vs-new CDN stats, including average and latest response-time deltas.
+4. Firefox intercepts Twitch `.m3u8` playlist responses and rewrites URLs from the slow host to the alternate observed host.
+5. Twitch reloads and the **CDN Switch Comparison** section shows old-vs-new CDN stats, including average and latest response-time deltas.
 
-If Twitch reconnects to the same slow host, click **Try Chrome Client**, then use **Renegotiate CDN** again. This experimentally changes the client signature sent to Twitch playlist allocation requests. It may not affect CDN choice because Twitch usually allocates CDN edges from IP/POP/DNS and internal capacity signals.
-
-If the CDN table shows two video delivery hosts, **Redirect CDN** can transparently redirect the dominant/current host to the best alternate observed host. This is the most aggressive browser-side experiment short of running a local HLS proxy. It only works if Twitch's segment tokens are portable across those hosts.
-
-Use **Clear Avoids** to remove all temporary CDN blocks. Hard blocking a video CDN can produce Twitch Error #2000 if Twitch reuses a playlist that still points at the blocked host, so the hard-block button is best treated as an advanced test.
-
-You can also paste a full Twitch segment URL, for example a `.ts` request from the browser network panel, into the manual CDN field and click **Hard Block Entered CDN**. Static asset hosts such as `static-cdn.jtvnw.net` are intentionally not blocked because they serve site assets rather than the video stream.
+Use **Clear Rewrite** to remove the playlist rewrite. This works only in Firefox because it depends on Mozilla's response filtering API. It may still fail if Twitch's segment tokens are bound to the original host.
 
 ## Notes
 

@@ -7,7 +7,8 @@
       cdnHosts: {},
       recentRequests: [],
       avoidedCdns: {},
-      cdnRedirect: null
+      cdnRedirect: null,
+      playlistRewrite: null
     },
     perfSeen: new Set(),
     perfSamples: [],
@@ -520,6 +521,7 @@
         probes: state.probeSamples.slice(0, 20),
         avoidedCdns: state.network.avoidedCdns || {},
         cdnRedirect: state.network.cdnRedirect || null,
+        playlistRewrite: state.network.playlistRewrite || null,
         pendingSwitch: state.pendingSwitch,
         switchHistory: state.switchHistory.slice(0, 10)
       },
@@ -585,28 +587,16 @@
         </div>
         <div class="tdc-tools">
           <button class="tdc-button" type="button" data-probe>Probe CDN</button>
-          <button class="tdc-button tdc-danger" type="button" data-avoid-cdn>Renegotiate CDN</button>
-          <button class="tdc-button" type="button" data-client-chrome>Try Chrome Client</button>
-          <button class="tdc-button" type="button" data-client-reset>Reset Client</button>
-          <button class="tdc-button tdc-danger" type="button" data-redirect-cdn>Redirect CDN</button>
-          <button class="tdc-button" type="button" data-clear-redirect>Clear Redirect</button>
+          <button class="tdc-button tdc-danger" type="button" data-rewrite-playlist>Rewrite Playlist CDN</button>
+          <button class="tdc-button" type="button" data-clear-rewrite>Clear Rewrite</button>
           <button class="tdc-button" type="button" data-toggle-graphs>Show Graphs</button>
-          <button class="tdc-button" type="button" data-clear-avoids>Clear Avoids</button>
           <button class="tdc-button" type="button" data-copy>Copy JSON</button>
           <button class="tdc-button" type="button" data-export>Download JSON</button>
           <button class="tdc-button" type="button" data-clear>Clear</button>
         </div>
-        <div class="tdc-manual">
-          <input class="tdc-input" type="text" data-cdn-input placeholder="Paste Twitch segment URL or CDN host">
-          <button class="tdc-button tdc-danger" type="button" data-avoid-entered-cdn>Hard Block Entered CDN</button>
-        </div>
-        <div class="tdc-card">
-          <div class="tdc-label">Avoided CDNs</div>
-          <div class="tdc-value" data-avoided-cdns>none</div>
-        </div>
         <div class="tdc-card" style="margin-top: 8px;">
-          <div class="tdc-label">Active CDN Redirect</div>
-          <div class="tdc-value" data-cdn-redirect>none</div>
+          <div class="tdc-label">Active Playlist Rewrite</div>
+          <div class="tdc-value" data-playlist-rewrite>none</div>
         </div>
         <div class="tdc-card" style="margin-top: 8px;">
           <div class="tdc-label">CDN Switch Comparison</div>
@@ -723,34 +713,12 @@
       render();
     });
 
-    root.querySelector("[data-avoid-cdn]").addEventListener("click", async () => {
-      await renegotiateCdn();
+    root.querySelector("[data-rewrite-playlist]").addEventListener("click", async () => {
+      await rewritePlaylistCdn();
     });
 
-    root.querySelector("[data-avoid-entered-cdn]").addEventListener("click", async () => {
-      const input = root.querySelector("[data-cdn-input]");
-      await avoidSpecificCdn(input?.value || "");
-    });
-
-    root.querySelector("[data-clear-avoids]").addEventListener("click", async () => {
-      await clearAvoidedCdns();
-      render();
-    });
-
-    root.querySelector("[data-client-chrome]").addEventListener("click", async () => {
-      await setClientProfile("chrome-windows");
-    });
-
-    root.querySelector("[data-client-reset]").addEventListener("click", async () => {
-      await setClientProfile("default");
-    });
-
-    root.querySelector("[data-redirect-cdn]").addEventListener("click", async () => {
-      await redirectCurrentCdn();
-    });
-
-    root.querySelector("[data-clear-redirect]").addEventListener("click", async () => {
-      await clearCdnRedirect();
+    root.querySelector("[data-clear-rewrite]").addEventListener("click", async () => {
+      await clearPlaylistRewrite();
       render();
     });
 
@@ -958,6 +926,64 @@
 
     state.network.cdnRedirect = null;
     addLog("Cleared active CDN redirect.");
+  }
+
+  async function rewritePlaylistCdn() {
+    const diagnostics = getDiagnostics();
+    const fromHost = diagnostics.cdn.dominant?.host || parseCdnHost(getVideoRecentRequests()[0]?.url);
+    const toHost = getBestRedirectTarget(fromHost);
+
+    if (!fromHost) {
+      addLog("No current video CDN detected yet. Let the stream run until the CDN table has video segment rows.");
+      render();
+      return;
+    }
+
+    if (!toHost) {
+      addLog("No alternate video CDN observed yet. The playlist rewriter needs a second HLS host to target.");
+      render();
+      return;
+    }
+
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_SET_PLAYLIST_REWRITE",
+      fromHost,
+      toHost
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not enable playlist rewrite: ${response?.error || "unknown error"}`);
+      render();
+      return;
+    }
+
+    state.pendingSwitch = {
+      old: summarizeHostStats(fromHost),
+      oldEdge: getCdnEdgeDetails(fromHost),
+      startedAt: Date.now(),
+      url: location.href
+    };
+    state.network.playlistRewrite = response.rewrite;
+    saveSwitchState();
+    addLog(`Rewriting playlists from ${fromHost} to ${toHost}. Reloading Twitch.`);
+    clearSessionDiagnostics("Testing Firefox playlist response rewrite.", {
+      preserveSwitchTracking: true
+    });
+    window.setTimeout(() => location.reload(), 500);
+  }
+
+  async function clearPlaylistRewrite() {
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_CLEAR_PLAYLIST_REWRITE"
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not clear playlist rewrite: ${response?.error || "unknown error"}`);
+      return;
+    }
+
+    state.network.playlistRewrite = null;
+    addLog("Cleared active playlist rewrite.");
   }
 
   async function avoidSpecificCdn(input) {
@@ -1180,8 +1206,7 @@
     setText(root, "[data-responsiveness]", diagnostics.cdn.responsiveness);
     setText(root, "[data-cdn]", cdnHost);
     setText(root, "[data-cdn-edge]", formatEdgeDetails(diagnostics.cdn.edge));
-    setText(root, "[data-avoided-cdns]", formatAvoidedCdns(diagnostics.cdn.avoidedCdns));
-    setText(root, "[data-cdn-redirect]", formatCdnRedirect(diagnostics.cdn.cdnRedirect));
+    setText(root, "[data-playlist-rewrite]", formatPlaylistRewrite(diagnostics.cdn.playlistRewrite));
     setText(root, "[data-latency]", fmtSeconds(diagnostics.playback.liveLatency));
     setText(root, "[data-drops]", diagnostics.playback.totalVideoFrames ? `${diagnostics.playback.droppedVideoFrames} / ${diagnostics.playback.droppedFramePercent}%` : "n/a");
     setText(root, "[data-throughput]", fmtBitrate(diagnostics.performance.estimatedRecentThroughput));
@@ -1215,6 +1240,12 @@
     return `${redirect.fromHost} -> ${redirect.toHost}`;
   }
 
+  function formatPlaylistRewrite(rewrite) {
+    if (!rewrite?.fromHost || !rewrite?.toHost) return "none";
+    const count = rewrite.rewrittenUrls || 0;
+    return `${rewrite.fromHost} -> ${rewrite.toHost} (${count} urls rewritten)`;
+  }
+
   function formatEdgeDetails(edge) {
     if (!edge?.host || edge.host === "n/a") return "n/a";
     return `${edge.provider} / ${edge.role} / edge ${edge.edgeId} / region ${edge.region}`;
@@ -1229,7 +1260,8 @@
         state.network = {
           ...response,
           avoidedCdns: response.avoidedCdns || {},
-          cdnRedirect: response.cdnRedirect || null
+          cdnRedirect: response.cdnRedirect || null,
+          playlistRewrite: response.playlistRewrite || null
         };
         render();
       }
@@ -1241,7 +1273,8 @@
               state.network = {
                 ...response,
                 avoidedCdns: response.avoidedCdns || {},
-                cdnRedirect: response.cdnRedirect || null
+                cdnRedirect: response.cdnRedirect || null,
+                playlistRewrite: response.playlistRewrite || null
               };
               render();
             }
@@ -1261,7 +1294,8 @@
           ...state.network,
           ...message.payload,
           avoidedCdns: state.network.avoidedCdns || {},
-          cdnRedirect: state.network.cdnRedirect || null
+          cdnRedirect: state.network.cdnRedirect || null,
+          playlistRewrite: state.network.playlistRewrite || null
         };
         render();
       }

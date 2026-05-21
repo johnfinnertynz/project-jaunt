@@ -8,6 +8,8 @@ const CLIENT_RULE_ID = 19000;
 const CDN_RULE_STORAGE_KEY = "twitchDiagnosticsAvoidedCdns";
 const CLIENT_PROFILE_STORAGE_KEY = "twitchDiagnosticsClientProfile";
 const CDN_REDIRECT_STORAGE_KEY = "twitchDiagnosticsCdnRedirect";
+const PLAYLIST_REWRITE_STORAGE_KEY = "twitchDiagnosticsPlaylistRewrite";
+let activePlaylistRewrite = null;
 
 const CDN_HOST_HINTS = [
   "ttvnw.net",
@@ -152,6 +154,11 @@ async function readCdnRedirect() {
   return result?.[CDN_REDIRECT_STORAGE_KEY] || null;
 }
 
+async function readPlaylistRewrite() {
+  const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), PLAYLIST_REWRITE_STORAGE_KEY);
+  return result?.[PLAYLIST_REWRITE_STORAGE_KEY] || null;
+}
+
 async function writeAvoidedCdns(avoidedCdns) {
   await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
     [CDN_RULE_STORAGE_KEY]: avoidedCdns
@@ -161,6 +168,13 @@ async function writeAvoidedCdns(avoidedCdns) {
 async function writeCdnRedirect(redirect) {
   await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
     [CDN_REDIRECT_STORAGE_KEY]: redirect
+  });
+}
+
+async function writePlaylistRewrite(rewrite) {
+  activePlaylistRewrite = rewrite;
+  await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
+    [PLAYLIST_REWRITE_STORAGE_KEY]: rewrite
   });
 }
 
@@ -300,6 +314,104 @@ async function clearCdnRedirect() {
   return null;
 }
 
+async function setPlaylistRewrite(fromHost, toHost) {
+  const cleanFromHost = sanitizeHost(fromHost);
+  const cleanToHost = sanitizeHost(toHost);
+
+  if (!cleanFromHost || !cleanToHost || cleanFromHost === cleanToHost) {
+    throw new Error("Playlist rewrite requires two different Twitch video CDN hosts.");
+  }
+
+  if (!isVideoDeliveryHost(cleanFromHost) || !isVideoDeliveryHost(cleanToHost)) {
+    throw new Error("Playlist rewrite only supports Twitch video delivery CDN hosts.");
+  }
+
+  const rewrite = {
+    fromHost: cleanFromHost,
+    toHost: cleanToHost,
+    createdAt: Date.now(),
+    rewrittenPlaylists: 0,
+    rewrittenUrls: 0,
+    lastRewriteAt: null
+  };
+
+  await writePlaylistRewrite(rewrite);
+  return rewrite;
+}
+
+async function clearPlaylistRewrite() {
+  await writePlaylistRewrite(null);
+  return null;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function maybeRewritePlaylistText(text) {
+  const rewrite = activePlaylistRewrite;
+  if (!rewrite?.fromHost || !rewrite?.toHost || !text.includes(rewrite.fromHost)) {
+    return text;
+  }
+
+  const matcher = new RegExp(escapeRegExp(rewrite.fromHost), "g");
+  const rewritten = text.replace(matcher, rewrite.toHost);
+  const rewrites = (text.match(matcher) || []).length;
+
+  if (rewrites > 0) {
+    activePlaylistRewrite = {
+      ...rewrite,
+      rewrittenPlaylists: (rewrite.rewrittenPlaylists || 0) + 1,
+      rewrittenUrls: (rewrite.rewrittenUrls || 0) + rewrites,
+      lastRewriteAt: Date.now()
+    };
+    writePlaylistRewrite(activePlaylistRewrite).catch(() => {});
+  }
+
+  return rewritten;
+}
+
+function maybeFilterPlaylist(details) {
+  if (!globalThis.browser?.webRequest?.filterResponseData) return;
+  if (!activePlaylistRewrite?.fromHost || !activePlaylistRewrite?.toHost) return;
+
+  let parsed;
+  try {
+    parsed = new URL(details.url);
+  } catch {
+    return;
+  }
+
+  const path = parsed.pathname.toLowerCase();
+  if (!path.endsWith(".m3u8") && !path.includes("/api/channel/hls/")) return;
+
+  const filter = browser.webRequest.filterResponseData(details.requestId);
+  const decoder = new TextDecoder("utf-8");
+  const encoder = new TextEncoder();
+  const chunks = [];
+
+  filter.ondata = (event) => {
+    chunks.push(decoder.decode(event.data, { stream: true }));
+  };
+
+  filter.onstop = () => {
+    try {
+      const original = `${chunks.join("")}${decoder.decode()}`;
+      filter.write(encoder.encode(maybeRewritePlaylistText(original)));
+    } finally {
+      filter.close();
+    }
+  };
+
+  filter.onerror = () => {
+    try {
+      filter.disconnect();
+    } catch {
+      // The stream may already be closed by Firefox.
+    }
+  };
+}
+
 async function clearExpiredAvoidedCdns() {
   const avoidedCdns = await readAvoidedCdns();
   const expiredHosts = Object.keys(avoidedCdns)
@@ -403,6 +515,7 @@ function rememberRequest(tabId, sample) {
 
 api.webRequest.onBeforeRequest.addListener(
   (details) => {
+    maybeFilterPlaylist(details);
     if (!isTwitchMediaUrl(details.url)) return;
 
     requestStarts.set(details.requestId, {
@@ -414,6 +527,7 @@ api.webRequest.onBeforeRequest.addListener(
   {
     urls: [
       "*://*.twitch.tv/*",
+      "*://usher.ttvnw.net/*",
       "*://*.ttvnw.net/*",
       "*://*.jtvnw.net/*",
       "*://*.twitchcdn.net/*"
@@ -491,16 +605,19 @@ async function handleRuntimeMessage(message, sender) {
     try {
       const avoidedCdns = await readAvoidedCdns();
       const cdnRedirect = await readCdnRedirect();
+      const playlistRewrite = await readPlaylistRewrite();
       return {
         ...getTabState(sender.tab?.id ?? -1),
         avoidedCdns,
-        cdnRedirect
+        cdnRedirect,
+        playlistRewrite
       };
     } catch (error) {
       return {
         ...getTabState(sender.tab?.id ?? -1),
         avoidedCdns: {},
         cdnRedirect: null,
+        playlistRewrite: null,
         error: error.message
       };
     }
@@ -557,6 +674,28 @@ async function handleRuntimeMessage(message, sender) {
     }
   }
 
+  if (message?.type === "TWITCH_DIAGNOSTICS_SET_PLAYLIST_REWRITE") {
+    try {
+      return {
+        ok: true,
+        rewrite: await setPlaylistRewrite(message.fromHost, message.toHost)
+      };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
+  if (message?.type === "TWITCH_DIAGNOSTICS_CLEAR_PLAYLIST_REWRITE") {
+    try {
+      return {
+        ok: true,
+        rewrite: await clearPlaylistRewrite()
+      };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
   return null;
 }
 
@@ -582,6 +721,9 @@ if (api.alarms?.onAlarm) {
 }
 
 clearExpiredAvoidedCdns().catch(() => {});
+readPlaylistRewrite().then((rewrite) => {
+  activePlaylistRewrite = rewrite;
+}).catch(() => {});
 
 api.action.onClicked.addListener((tab) => {
   if (!tab.id) return;
