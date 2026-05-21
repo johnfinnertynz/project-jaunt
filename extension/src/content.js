@@ -153,8 +153,41 @@
   function getLiveLatency(video) {
     if (!video || !video.seekable?.length) return null;
 
-    const liveEdge = video.seekable.end(video.seekable.length - 1);
-    return Math.max(0, liveEdge - video.currentTime);
+    const currentTime = video.currentTime;
+    if (!Number.isFinite(currentTime)) return null;
+
+    let liveEdge = null;
+    let activeRangeStart = null;
+
+    for (let i = 0; i < video.seekable.length; i += 1) {
+      const start = video.seekable.start(i);
+      const end = video.seekable.end(i);
+
+      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+
+      if (currentTime >= start && currentTime <= end) {
+        activeRangeStart = start;
+        liveEdge = end;
+        break;
+      }
+
+      liveEdge = end;
+      activeRangeStart = start;
+    }
+
+    if (!Number.isFinite(liveEdge)) return null;
+
+    const latency = liveEdge - currentTime;
+    const activeWindow = activeRangeStart !== null ? liveEdge - activeRangeStart : null;
+
+    if (!Number.isFinite(latency) || latency < 0) return null;
+
+    // Twitch sometimes exposes absolute media timelines. Those produce huge
+    // offsets that are not meaningful user-facing live latency values.
+    if (latency > 300) return null;
+    if (activeWindow !== null && activeWindow > 0 && latency > activeWindow + 5) return null;
+
+    return latency;
   }
 
   function getVideoQuality(video) {
