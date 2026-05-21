@@ -5,17 +5,23 @@
     compact: false,
     network: {
       cdnHosts: {},
-      recentRequests: []
+      recentRequests: [],
+      avoidedCdns: {}
     },
     perfSeen: new Set(),
     perfSamples: [],
     probeSamples: [],
-    logs: []
+    logs: [],
+    pendingSwitch: null,
+    switchHistory: []
   };
 
   const SELECTORS = {
     root: "twitch-diagnostics-console"
   };
+
+  const PENDING_SWITCH_KEY = "twitchDiagnosticsPendingSwitch";
+  const SWITCH_HISTORY_KEY = "twitchDiagnosticsSwitchHistory";
 
   function fmtMs(value) {
     if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
@@ -56,6 +62,21 @@
     const now = new Date();
     state.logs.unshift(`[${now.toLocaleTimeString()}] ${message}`);
     state.logs = state.logs.slice(0, 80);
+  }
+
+  function loadSwitchState() {
+    try {
+      state.pendingSwitch = JSON.parse(sessionStorage.getItem(PENDING_SWITCH_KEY) || "null");
+      state.switchHistory = JSON.parse(sessionStorage.getItem(SWITCH_HISTORY_KEY) || "[]").slice(0, 10);
+    } catch {
+      state.pendingSwitch = null;
+      state.switchHistory = [];
+    }
+  }
+
+  function saveSwitchState() {
+    sessionStorage.setItem(PENDING_SWITCH_KEY, JSON.stringify(state.pendingSwitch));
+    sessionStorage.setItem(SWITCH_HISTORY_KEY, JSON.stringify(state.switchHistory.slice(0, 10)));
   }
 
   function getVideo() {
@@ -134,6 +155,58 @@
     return perfHost ? { host: perfHost, count: 0, avgMs: null } : null;
   }
 
+  function summarizeHostStats(host, stats = null) {
+    const source = stats || state.network.cdnHosts?.[host] || {};
+    const count = source.count || 0;
+
+    return {
+      host: host || "n/a",
+      count,
+      failures: source.failures || 0,
+      avgMs: count ? source.totalMs / count : null,
+      lastMs: source.lastMs ?? null,
+      lastStatus: source.lastStatus ?? null,
+      lastSeen: source.lastSeen ?? null
+    };
+  }
+
+  function updateSwitchTracking(diagnostics) {
+    const pending = state.pendingSwitch;
+    const currentHost = diagnostics.cdn.dominant?.host;
+
+    if (!pending) return false;
+
+    if (Date.now() - pending.startedAt > 10 * 60 * 1000) {
+      state.pendingSwitch = null;
+      addLog("CDN switch tracking expired before a new CDN was detected.");
+      saveSwitchState();
+      return true;
+    }
+
+    if (!currentHost || currentHost === pending.old.host) return false;
+
+    const nextStats = summarizeHostStats(currentHost);
+    const avgDelta = pending.old.avgMs !== null && nextStats.avgMs !== null
+      ? nextStats.avgMs - pending.old.avgMs
+      : null;
+    const lastDelta = pending.old.lastMs !== null && nextStats.lastMs !== null
+      ? nextStats.lastMs - pending.old.lastMs
+      : null;
+
+    state.switchHistory.unshift({
+      old: pending.old,
+      new: nextStats,
+      avgDelta,
+      lastDelta,
+      switchedAt: Date.now()
+    });
+    state.switchHistory = state.switchHistory.slice(0, 10);
+    state.pendingSwitch = null;
+    addLog(`CDN switched from ${pending.old.host} to ${nextStats.host}.`);
+    saveSwitchState();
+    return true;
+  }
+
   function getResponsivenessSummary() {
     const dominant = getDominantCdn();
     const samples = [
@@ -204,7 +277,10 @@
         dominant: responsiveness.dominant,
         responsiveness: responsiveness.label,
         status: responsiveness.status,
-        probes: state.probeSamples.slice(0, 20)
+        probes: state.probeSamples.slice(0, 20),
+        avoidedCdns: state.network.avoidedCdns || {},
+        pendingSwitch: state.pendingSwitch,
+        switchHistory: state.switchHistory.slice(0, 10)
       },
       logs: state.logs.slice(0, 40)
     };
@@ -264,9 +340,33 @@
         </div>
         <div class="tdc-tools">
           <button class="tdc-button" type="button" data-probe>Probe CDN</button>
+          <button class="tdc-button tdc-danger" type="button" data-avoid-cdn>Avoid CDN + Reload</button>
+          <button class="tdc-button" type="button" data-clear-avoids>Clear Avoids</button>
           <button class="tdc-button" type="button" data-copy>Copy JSON</button>
           <button class="tdc-button" type="button" data-export>Download JSON</button>
           <button class="tdc-button" type="button" data-clear>Clear</button>
+        </div>
+        <div class="tdc-card">
+          <div class="tdc-label">Avoided CDNs</div>
+          <div class="tdc-value" data-avoided-cdns>none</div>
+        </div>
+        <div class="tdc-card" style="margin-top: 8px;">
+          <div class="tdc-label">CDN Switch Comparison</div>
+          <div class="tdc-switch" data-switch-summary>Run Avoid CDN + Reload to compare old vs new CDN stats.</div>
+          <table class="tdc-table">
+            <thead>
+              <tr>
+                <th>CDN</th>
+                <th>Avg</th>
+                <th>Last</th>
+                <th>Req</th>
+                <th>Fail</th>
+              </tr>
+            </thead>
+            <tbody data-switch-table>
+              <tr><td colspan="5" class="tdc-muted">No switch captured yet.</td></tr>
+            </tbody>
+          </table>
         </div>
         <div class="tdc-optional">
           <div class="tdc-card">
@@ -308,7 +408,7 @@
     });
 
     root.querySelector("[data-clear]").addEventListener("click", () => {
-      state.network = { cdnHosts: {}, recentRequests: [] };
+      state.network = { ...state.network, cdnHosts: {}, recentRequests: [] };
       state.perfSamples = [];
       state.perfSeen = new Set();
       state.probeSamples = [];
@@ -340,6 +440,15 @@
 
     root.querySelector("[data-probe]").addEventListener("click", async () => {
       await probeCdn();
+      render();
+    });
+
+    root.querySelector("[data-avoid-cdn]").addEventListener("click", async () => {
+      await avoidCurrentCdn();
+    });
+
+    root.querySelector("[data-clear-avoids]").addEventListener("click", async () => {
+      await clearAvoidedCdns();
       render();
     });
 
@@ -420,6 +529,77 @@
     state.probeSamples = state.probeSamples.slice(0, 30);
   }
 
+  function sendRuntimeMessage(message) {
+    return new Promise((resolve, reject) => {
+      try {
+        if (globalThis.browser?.runtime?.sendMessage) {
+          api.runtime.sendMessage(message).then(resolve).catch(reject);
+          return;
+        }
+
+        api.runtime.sendMessage(message, (response) => {
+          const error = api.runtime.lastError;
+          if (error) reject(new Error(error.message));
+          else resolve(response);
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  async function avoidCurrentCdn() {
+    const diagnostics = getDiagnostics();
+    const host = diagnostics.cdn.dominant?.host || safeUrlHost(diagnostics.network.recentRequests[0]?.url);
+
+    if (!host) {
+      addLog("No active CDN host detected yet. Start playback, wait for requests, then try again.");
+      render();
+      return;
+    }
+
+    addLog(`Avoiding ${host} for 5 minutes and reloading Twitch.`);
+    state.pendingSwitch = {
+      old: summarizeHostStats(host),
+      startedAt: Date.now(),
+      url: location.href
+    };
+    saveSwitchState();
+
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_AVOID_CDN",
+      host,
+      minutes: 5
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not avoid CDN: ${response?.error || "unknown error"}`);
+      render();
+      return;
+    }
+
+    state.network.avoidedCdns = {
+      ...(state.network.avoidedCdns || {}),
+      [host]: response.rule
+    };
+    render();
+    window.setTimeout(() => location.reload(), 700);
+  }
+
+  async function clearAvoidedCdns() {
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_CLEAR_AVOIDED_CDNS"
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not clear CDN avoids: ${response?.error || "unknown error"}`);
+      return;
+    }
+
+    state.network.avoidedCdns = response.avoidedCdns || {};
+    addLog("Cleared avoided CDN rules.");
+  }
+
   function setText(root, selector, value) {
     const node = root.querySelector(selector);
     if (node) node.textContent = value;
@@ -445,11 +625,71 @@
     table.innerHTML = rows || `<tr><td colspan="4" class="tdc-muted">Waiting for Twitch media requests...</td></tr>`;
   }
 
+  function fmtDelta(value) {
+    if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+    const rounded = Math.round(value);
+    if (rounded === 0) return "0 ms";
+    return `${rounded > 0 ? "+" : ""}${rounded} ms`;
+  }
+
+  function renderSwitchComparison(root, diagnostics) {
+    const summary = root.querySelector("[data-switch-summary]");
+    const table = root.querySelector("[data-switch-table]");
+    if (!summary || !table) return;
+
+    const latest = diagnostics.cdn.switchHistory[0];
+
+    if (!latest && diagnostics.cdn.pendingSwitch) {
+      const old = diagnostics.cdn.pendingSwitch.old;
+      summary.textContent = `Waiting for a new CDN after avoiding ${old.host}. Old CDN avg ${fmtMs(old.avgMs)}, last ${fmtMs(old.lastMs)}, ${old.count} requests, ${old.failures} failures.`;
+      table.innerHTML = `
+        <tr>
+          <td>old: ${old.host}</td>
+          <td>${fmtMs(old.avgMs)}</td>
+          <td>${fmtMs(old.lastMs)}</td>
+          <td>${old.count}</td>
+          <td>${old.failures}</td>
+        </tr>
+        <tr><td colspan="5" class="tdc-muted">Reloading or waiting for Twitch to negotiate another CDN...</td></tr>
+      `;
+      return;
+    }
+
+    if (!latest) {
+      summary.textContent = "Run Avoid CDN + Reload to compare old vs new CDN stats.";
+      table.innerHTML = `<tr><td colspan="5" class="tdc-muted">No switch captured yet.</td></tr>`;
+      return;
+    }
+
+    const avgWord = latest.avgDelta !== null && latest.avgDelta < 0 ? "faster" : "slower";
+    const lastWord = latest.lastDelta !== null && latest.lastDelta < 0 ? "faster" : "slower";
+    summary.textContent = `Switched ${latest.old.host} -> ${latest.new.host}. Avg changed ${fmtDelta(latest.avgDelta)} (${avgWord}); latest response changed ${fmtDelta(latest.lastDelta)} (${lastWord}).`;
+    table.innerHTML = `
+      <tr>
+        <td>old: ${latest.old.host}</td>
+        <td>${fmtMs(latest.old.avgMs)}</td>
+        <td>${fmtMs(latest.old.lastMs)}</td>
+        <td>${latest.old.count}</td>
+        <td>${latest.old.failures}</td>
+      </tr>
+      <tr>
+        <td>new: ${latest.new.host}</td>
+        <td>${fmtMs(latest.new.avgMs)}</td>
+        <td>${fmtMs(latest.new.lastMs)}</td>
+        <td>${latest.new.count}</td>
+        <td>${latest.new.failures}</td>
+      </tr>
+    `;
+  }
+
   function render() {
     const root = document.getElementById(SELECTORS.root);
     if (!root) return;
 
-    const diagnostics = getDiagnostics();
+    let diagnostics = getDiagnostics();
+    if (updateSwitchTracking(diagnostics)) {
+      diagnostics = getDiagnostics();
+    }
     const cdnHost = diagnostics.cdn.dominant?.host || "n/a";
     const playbackState = diagnostics.playback.foundVideo
       ? `${diagnostics.playback.paused ? "paused" : "playing"} / ready ${diagnostics.playback.readyState}`
@@ -464,12 +704,14 @@
     setText(root, "[data-buffer]", fmtSeconds(diagnostics.playback.bufferAhead));
     setText(root, "[data-responsiveness]", diagnostics.cdn.responsiveness);
     setText(root, "[data-cdn]", cdnHost);
+    setText(root, "[data-avoided-cdns]", formatAvoidedCdns(diagnostics.cdn.avoidedCdns));
     setText(root, "[data-latency]", fmtSeconds(diagnostics.playback.liveLatency));
     setText(root, "[data-drops]", diagnostics.playback.totalVideoFrames ? `${diagnostics.playback.droppedVideoFrames} / ${diagnostics.playback.droppedFramePercent}%` : "n/a");
     setText(root, "[data-throughput]", fmtBitrate(diagnostics.performance.estimatedRecentThroughput));
     setText(root, "[data-playback]", playbackState);
     setText(root, "[data-log]", state.logs.join("\n"));
     renderCdnTable(root, diagnostics);
+    renderSwitchComparison(root, diagnostics);
   }
 
   function togglePanel() {
@@ -477,23 +719,42 @@
     render();
   }
 
+  function formatAvoidedCdns(avoidedCdns) {
+    const entries = Object.values(avoidedCdns || {});
+    if (!entries.length) return "none";
+
+    return entries
+      .map((entry) => {
+        const remainingMs = Math.max(0, entry.expiresAt - Date.now());
+        const remainingMin = Math.ceil(remainingMs / 60000);
+        return `${entry.host} (${remainingMin}m)`;
+      })
+      .join(", ");
+  }
+
   function connectBackground() {
     try {
       if (globalThis.browser?.runtime?.sendMessage) {
         api.runtime.sendMessage({ type: "TWITCH_DIAGNOSTICS_GET_NETWORK" })
           .then((response) => {
-            if (response) {
-              state.network = response;
-              render();
-            }
+      if (response) {
+        state.network = {
+          ...response,
+          avoidedCdns: response.avoidedCdns || {}
+        };
+        render();
+      }
           })
           .catch(() => {});
       } else {
         api.runtime.sendMessage({ type: "TWITCH_DIAGNOSTICS_GET_NETWORK" }, (response) => {
-          if (response) {
-            state.network = response;
-            render();
-          }
+            if (response) {
+              state.network = {
+                ...response,
+                avoidedCdns: response.avoidedCdns || {}
+              };
+              render();
+            }
         });
       }
     } catch {
@@ -506,7 +767,11 @@
       }
 
       if (message?.type === "TWITCH_DIAGNOSTICS_NETWORK_SAMPLE") {
-        state.network = message.payload;
+        state.network = {
+          ...state.network,
+          ...message.payload,
+          avoidedCdns: state.network.avoidedCdns || {}
+        };
         render();
       }
     });
@@ -520,6 +785,7 @@
     }
   });
 
+  loadSwitchState();
   createPanel();
   connectBackground();
   window.setInterval(render, 1000);

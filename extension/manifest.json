@@ -5,6 +5,8 @@
   "description": "Advanced Twitch playback diagnostics: buffer health, CDN host, request responsiveness, and troubleshooting exports.",
   "permissions": [
     "activeTab",
+    "alarms",
+    "declarativeNetRequest",
     "storage",
     "webRequest"
   ],

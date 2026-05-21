@@ -8,6 +8,8 @@ Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox
 - connected CDN host detection from media requests and performance entries
 - CDN request duration, last status, request count, and failure tracking
 - manual CDN probe timing
+- temporary CDN avoid rules to force Twitch to renegotiate a different edge
+- old-vs-new CDN comparison after forcing a reconnect
 - live latency estimate when Twitch exposes seekable live ranges
 - dropped-frame count and dropped-frame percentage
 - recent throughput estimate from browser resource timing
@@ -30,6 +32,19 @@ Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox
 4. Open a Twitch stream and click the extension icon.
 
 Temporary Firefox add-ons are removed when the browser restarts. For permanent install, package and sign the extension through Mozilla Add-ons.
+
+## Forcing A New CDN
+
+Twitch controls CDN selection internally, so the extension cannot directly choose a specific edge server. The reliable workaround is:
+
+1. Let playback run until the console detects the active CDN.
+2. Click **Avoid CDN + Reload**.
+3. The extension snapshots the old CDN's request count, average response time, latest response time, and failures.
+4. The extension blocks that CDN host for 5 minutes and reloads Twitch.
+5. Twitch should reconnect through a different available CDN edge.
+6. The **CDN Switch Comparison** section shows old-vs-new CDN stats, including average and latest response-time deltas.
+
+Use **Clear Avoids** to remove all temporary CDN blocks. If Twitch reconnects to the same slow host, wait for more media requests to appear and run the avoid action again.
 
 ## Notes
 

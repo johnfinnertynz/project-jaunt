@@ -84,6 +84,15 @@
   background: #31405a;
 }
 
+.tdc-danger {
+  background: #4a1f2a;
+  border-color: #7f2d3d;
+}
+
+.tdc-danger:hover {
+  background: #633043;
+}
+
 .tdc-body {
   padding: 12px;
   overflow: auto;
@@ -160,6 +169,12 @@
   border: 1px solid #2a3242;
   border-radius: 7px;
   white-space: pre-wrap;
+}
+
+.tdc-switch {
+  color: #dbe4f0;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
 }
 
 .tdc-compact .tdc-optional {
