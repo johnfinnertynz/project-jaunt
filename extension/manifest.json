@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Twitch Diagnostics Console",
+  "version": "0.1.0",
+  "description": "Advanced Twitch playback diagnostics: buffer health, CDN host, request responsiveness, and troubleshooting exports.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "*://*.twitch.tv/*",
+    "*://*.ttvnw.net/*",
+    "*://*.jtvnw.net/*",
+    "*://*.twitchcdn.net/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_title": "Toggle Twitch Diagnostics"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.twitch.tv/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "css": [
+        "src/content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "twitch-diagnostics-console@johnfinnertynz.local",
+      "strict_min_version": "109.0"
+    }
+  }
+}
