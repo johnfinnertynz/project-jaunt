@@ -1,26 +1,16 @@
 # Project Jaunt
 
-Project Jaunt is the working home for web, browser tooling, and diagnostics projects.
+Project Jaunt is the working home for Twitch Diagnostics Console, a browser add-on for advanced Twitch playback logging.
 
 The focus is practical and evidence-based:
 
-- build useful browser-based diagnostic tools
-- maintain project documentation and install notes
-- keep code and assets versioned cleanly
-- support future website and technical project work
-
-## Website
-
-Primary domain:
-
-https://johnfinnerty.co.nz
-
-## Status
-
-This repository is being set up as the project hub for code, documentation, and technical assets.
+- capture Twitch playback and CDN diagnostics
+- provide exportable troubleshooting logs
+- keep browser add-on code and documentation versioned cleanly
+- support Chrome, Edge, and Firefox testing
 
 ## Twitch Diagnostics Add-on
 
-The first tool in this repo is a Twitch diagnostics browser add-on for Chrome, Edge, and Firefox.
+The add-on is designed for diagnostics only. It does not change Twitch playback, proxy traffic, or attempt to bypass Twitch behavior.
 
 See [extension/README.md](extension/README.md) for install instructions.

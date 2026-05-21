@@ -5,17 +5,11 @@
   "description": "Advanced Twitch playback diagnostics: buffer health, CDN host, request responsiveness, and troubleshooting exports.",
   "permissions": [
     "activeTab",
-    "alarms",
-    "declarativeNetRequest",
-    "proxy",
     "storage",
-    "webRequest",
-    "webRequestBlocking",
-    "webRequestFilterResponse"
+    "webRequest"
   ],
   "host_permissions": [
     "*://*.twitch.tv/*",
-    "*://usher.ttvnw.net/*",
     "*://*.ttvnw.net/*",
     "*://*.jtvnw.net/*",
     "*://*.twitchcdn.net/*"
@@ -43,7 +37,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "twitch-diagnostics-console@johnfinnertynz.local",
-      "strict_min_version": "113.0"
+      "strict_min_version": "109.0"
     }
   }
 }

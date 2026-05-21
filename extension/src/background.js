@@ -2,16 +2,6 @@ const api = globalThis.browser || globalThis.chrome;
 
 const requestStarts = new Map();
 const tabDiagnostics = new Map();
-const REDIRECT_RULE_ID = 18000;
-const CDN_RULE_ID_START = 20000;
-const CLIENT_RULE_ID = 19000;
-const CDN_RULE_STORAGE_KEY = "twitchDiagnosticsAvoidedCdns";
-const CLIENT_PROFILE_STORAGE_KEY = "twitchDiagnosticsClientProfile";
-const CDN_REDIRECT_STORAGE_KEY = "twitchDiagnosticsCdnRedirect";
-const PLAYLIST_REWRITE_STORAGE_KEY = "twitchDiagnosticsPlaylistRewrite";
-const VIDEO_PROXY_STORAGE_KEY = "twitchDiagnosticsVideoProxy";
-let activePlaylistRewrite = null;
-let activeVideoProxy = null;
 
 const CDN_HOST_HINTS = [
   "ttvnw.net",
@@ -21,81 +11,6 @@ const CDN_HOST_HINTS = [
   "akamaized.net",
   "fastly.net"
 ];
-
-function isTwitchMediaUrl(url) {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-    const path = parsed.pathname.toLowerCase();
-
-    return CDN_HOST_HINTS.some((hint) => host.includes(hint)) ||
-      path.endsWith(".m3u8") ||
-      path.endsWith(".ts") ||
-      path.endsWith(".m4s") ||
-      path.includes("/hls/") ||
-      path.includes("/vod/");
-  } catch {
-    return false;
-  }
-}
-
-function getTabState(tabId) {
-  if (!tabDiagnostics.has(tabId)) {
-    tabDiagnostics.set(tabId, {
-      cdnHosts: {},
-      recentRequests: [],
-      playlistUrls: [],
-      allocatorHosts: {},
-      lastUpdated: Date.now()
-    });
-  }
-
-  return tabDiagnostics.get(tabId);
-}
-
-function sendTabMessage(tabId, message) {
-  try {
-    const result = api.tabs.sendMessage(tabId, message);
-    if (result?.catch) result.catch(() => {});
-  } catch {
-    // The content script is not always present on every Twitch/GitHub/browser tab.
-  }
-}
-
-function callExtensionApi(fn, ...args) {
-  return new Promise((resolve, reject) => {
-    try {
-      if (globalThis.browser) {
-        Promise.resolve(fn(...args)).then(resolve).catch(reject);
-        return;
-      }
-
-      fn(...args, (result) => {
-        const error = api.runtime.lastError;
-        if (error) reject(new Error(error.message));
-        else resolve(result);
-      });
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-function ruleIdForHost(host) {
-  let hash = 0;
-  for (let i = 0; i < host.length; i += 1) {
-    hash = ((hash << 5) - hash + host.charCodeAt(i)) | 0;
-  }
-
-  return CDN_RULE_ID_START + Math.abs(hash % 10000);
-}
-
-function sanitizeHost(host) {
-  return String(host || "")
-    .trim()
-    .toLowerCase()
-    .replace(/^\.+|\.+$/g, "");
-}
 
 function isKnownCdnHost(host) {
   return CDN_HOST_HINTS.some((hint) => host.includes(hint));
@@ -116,24 +31,39 @@ function isVideoDeliveryHost(host) {
     );
 }
 
-function classifyDelivery(url, resourceType = "") {
-  let parsed;
+function isTwitchMediaUrl(url) {
   try {
-    parsed = new URL(url);
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+
+    return isVideoDeliveryHost(host) ||
+      path.endsWith(".m3u8") ||
+      path.endsWith(".ts") ||
+      path.endsWith(".m4s") ||
+      path.includes("/hls/") ||
+      path.includes("/vod/");
   } catch {
-    return "unknown";
+    return false;
+  }
+}
+
+function classifyDelivery(url, resourceType = "") {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    const full = `${path}${parsed.search.toLowerCase()}`;
+
+    if (path.endsWith(".m3u8")) return "playlist";
+    if (full.includes("ad") || full.includes("stitched") || full.includes("ssai")) return "ad media";
+    if (path.endsWith(".ts") || path.endsWith(".m4s") || path.includes("/segment/")) return "video segment";
+    if (path.includes("/hls/")) return "hls media";
+    if (path.includes("/vod/")) return "vod media";
+    if (resourceType === "media") return "media";
+  } catch {
+    // Fall through to the generic label.
   }
 
-  const path = parsed.pathname.toLowerCase();
-  const query = parsed.search.toLowerCase();
-  const full = `${path}${query}`;
-
-  if (path.endsWith(".m3u8")) return "playlist";
-  if (full.includes("ad") || full.includes("stitched") || full.includes("ssai")) return "ad media";
-  if (path.endsWith(".ts") || path.endsWith(".m4s") || path.includes("/segment/")) return "video segment";
-  if (path.includes("/hls/")) return "hls media";
-  if (path.includes("/vod/")) return "vod media";
-  if (resourceType === "media") return "media";
   return "video delivery";
 }
 
@@ -143,512 +73,36 @@ function getHeaderValue(headers = [], name) {
 }
 
 function getContentLength(headers = []) {
-  const value = getHeaderValue(headers, "content-length");
-  const parsed = Number.parseInt(value || "", 10);
+  const parsed = Number.parseInt(getHeaderValue(headers, "content-length") || "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
-function isPlaylistUrl(url) {
-  try {
-    const parsed = new URL(url);
-    const path = parsed.pathname.toLowerCase();
-    return path.endsWith(".m3u8") || path.includes("/api/channel/hls/");
-  } catch {
-    return false;
-  }
-}
-
-function extractVideoHostsFromText(text) {
-  const hosts = new Set();
-  const matches = text.match(/https?:\/\/([^/\s"']+)/g) || [];
-
-  for (const match of matches) {
-    try {
-      const host = new URL(match).hostname.toLowerCase();
-      if (isVideoDeliveryHost(host)) hosts.add(host);
-    } catch {
-      // Ignore malformed URLs inside comments or tags.
-    }
-  }
-
-  return [...hosts];
-}
-
-function rememberPlaylistUrl(tabId, url) {
-  if (tabId < 0 || !isPlaylistUrl(url)) return;
-
-  const state = getTabState(tabId);
-  state.playlistUrls = [
-    url,
-    ...state.playlistUrls.filter((item) => item !== url)
-  ].slice(0, 8);
-  state.lastUpdated = Date.now();
-}
-
-function rememberAllocatorHosts(tabId, hosts, sourceUrl) {
-  if (tabId < 0 || !hosts.length) return;
-
-  const state = getTabState(tabId);
-
-  for (const host of hosts) {
-    const current = state.allocatorHosts[host] || {
-      host,
-      count: 0,
-      lastSeen: null,
-      sourceUrl: null
-    };
-    current.count += 1;
-    current.lastSeen = Date.now();
-    current.sourceUrl = sourceUrl;
-    state.allocatorHosts[host] = current;
-  }
-
-  state.lastUpdated = Date.now();
-}
-
-function cacheBustUrl(url, index) {
-  const parsed = new URL(url);
-  parsed.searchParams.set("_tdc_probe", `${Date.now()}_${index}`);
-  return parsed.toString();
-}
-
-async function samplePlaylistAllocator(tabId) {
-  const state = getTabState(tabId);
-  const urls = state.playlistUrls.slice(0, 3);
-
-  if (!urls.length) {
-    return {
-      ok: false,
-      error: "No Twitch playlist URL has been captured yet. Let the stream run for a few seconds."
-    };
-  }
-
-  const foundHosts = new Set();
-  const samples = [];
-
-  for (const url of urls) {
-    for (let i = 0; i < 4; i += 1) {
-      const startedAt = Date.now();
-      try {
-        const response = await fetch(cacheBustUrl(url, i), {
-          cache: "no-store",
-          credentials: "include"
-        });
-        const text = await response.text();
-        const hosts = extractVideoHostsFromText(text);
-        hosts.forEach((host) => foundHosts.add(host));
-        rememberAllocatorHosts(tabId, hosts, url);
-        samples.push({
-          url,
-          ok: response.ok,
-          status: response.status,
-          hosts,
-          durationMs: Date.now() - startedAt
-        });
-      } catch (error) {
-        samples.push({
-          url,
-          ok: false,
-          error: error.message,
-          hosts: [],
-          durationMs: Date.now() - startedAt
-        });
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    hosts: [...foundHosts],
-    samples,
-    allocatorHosts: getTabState(tabId).allocatorHosts
-  };
-}
-
-async function readAvoidedCdns() {
-  const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), CDN_RULE_STORAGE_KEY);
-  return result?.[CDN_RULE_STORAGE_KEY] || {};
-}
-
-async function readCdnRedirect() {
-  const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), CDN_REDIRECT_STORAGE_KEY);
-  return result?.[CDN_REDIRECT_STORAGE_KEY] || null;
-}
-
-async function readPlaylistRewrite() {
-  const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), PLAYLIST_REWRITE_STORAGE_KEY);
-  return result?.[PLAYLIST_REWRITE_STORAGE_KEY] || null;
-}
-
-async function readVideoProxy() {
-  const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), VIDEO_PROXY_STORAGE_KEY);
-  return result?.[VIDEO_PROXY_STORAGE_KEY] || null;
-}
-
-async function writeAvoidedCdns(avoidedCdns) {
-  await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
-    [CDN_RULE_STORAGE_KEY]: avoidedCdns
-  });
-}
-
-async function writeCdnRedirect(redirect) {
-  await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
-    [CDN_REDIRECT_STORAGE_KEY]: redirect
-  });
-}
-
-async function writePlaylistRewrite(rewrite) {
-  activePlaylistRewrite = rewrite;
-  await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
-    [PLAYLIST_REWRITE_STORAGE_KEY]: rewrite
-  });
-}
-
-async function writeVideoProxy(proxyConfig) {
-  activeVideoProxy = proxyConfig;
-  await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
-    [VIDEO_PROXY_STORAGE_KEY]: proxyConfig
-  });
-}
-
-async function applyAvoidedCdnRule(host, minutes = 5) {
-  const cleanHost = sanitizeHost(host);
-
-  if (!cleanHost || !isVideoDeliveryHost(cleanHost)) {
-    throw new Error("Only Twitch video delivery CDN hosts can be avoided. Static asset CDNs are ignored.");
-  }
-
-  if (!api.declarativeNetRequest?.updateDynamicRules) {
-    throw new Error("This browser does not expose dynamic request blocking to the extension.");
-  }
-
-  const ruleId = ruleIdForHost(cleanHost);
-  const expiresAt = Date.now() + Math.max(1, minutes) * 60 * 1000;
-  const rule = {
-    id: ruleId,
-    priority: 1,
-    action: {
-      type: "block"
-    },
-    condition: {
-      urlFilter: `||${cleanHost}^`,
-      resourceTypes: [
-        "xmlhttprequest",
-        "media",
-        "other"
-      ]
-    }
-  };
-
-  await callExtensionApi(api.declarativeNetRequest.updateDynamicRules.bind(api.declarativeNetRequest), {
-    removeRuleIds: [ruleId],
-    addRules: [rule]
-  });
-
-  const avoidedCdns = await readAvoidedCdns();
-  avoidedCdns[cleanHost] = {
-    ruleId,
-    host: cleanHost,
-    expiresAt,
-    createdAt: Date.now()
-  };
-  await writeAvoidedCdns(avoidedCdns);
-
-  if (api.alarms?.create) {
-    api.alarms.create(`clear-cdn-${ruleId}`, {
-      when: expiresAt + 500
+function getTabState(tabId) {
+  if (!tabDiagnostics.has(tabId)) {
+    tabDiagnostics.set(tabId, {
+      cdnHosts: {},
+      recentRequests: [],
+      lastUpdated: Date.now()
     });
   }
 
-  return avoidedCdns[cleanHost];
+  return tabDiagnostics.get(tabId);
 }
 
-async function clearAvoidedCdn(host = null) {
-  if (!api.declarativeNetRequest?.updateDynamicRules) return {};
-
-  const avoidedCdns = await readAvoidedCdns();
-  const hosts = host ? [sanitizeHost(host)] : Object.keys(avoidedCdns);
-  const ruleIds = hosts
-    .map((item) => avoidedCdns[item]?.ruleId)
-    .filter((item) => Number.isInteger(item));
-
-  if (ruleIds.length) {
-    await callExtensionApi(api.declarativeNetRequest.updateDynamicRules.bind(api.declarativeNetRequest), {
-      removeRuleIds: ruleIds
-    });
-  }
-
-  for (const item of hosts) {
-    delete avoidedCdns[item];
-  }
-
-  await writeAvoidedCdns(avoidedCdns);
-  return avoidedCdns;
-}
-
-async function setCdnRedirect(fromHost, toHost) {
-  const cleanFromHost = sanitizeHost(fromHost);
-  const cleanToHost = sanitizeHost(toHost);
-
-  if (!cleanFromHost || !cleanToHost || cleanFromHost === cleanToHost) {
-    throw new Error("Redirect requires two different Twitch video CDN hosts.");
-  }
-
-  if (!isVideoDeliveryHost(cleanFromHost) || !isVideoDeliveryHost(cleanToHost)) {
-    throw new Error("Redirect only supports Twitch video delivery CDN hosts.");
-  }
-
-  if (!api.declarativeNetRequest?.updateDynamicRules) {
-    throw new Error("This browser does not expose dynamic request redirect rules to the extension.");
-  }
-
-  await callExtensionApi(api.declarativeNetRequest.updateDynamicRules.bind(api.declarativeNetRequest), {
-    removeRuleIds: [REDIRECT_RULE_ID],
-    addRules: [{
-      id: REDIRECT_RULE_ID,
-      priority: 3,
-      action: {
-        type: "redirect",
-        redirect: {
-          transform: {
-            host: cleanToHost
-          }
-        }
-      },
-      condition: {
-        urlFilter: `||${cleanFromHost}^`,
-        resourceTypes: [
-          "xmlhttprequest",
-          "media",
-          "other"
-        ]
-      }
-    }]
-  });
-
-  const redirect = {
-    fromHost: cleanFromHost,
-    toHost: cleanToHost,
-    createdAt: Date.now()
-  };
-  await writeCdnRedirect(redirect);
-
-  return redirect;
-}
-
-async function clearCdnRedirect() {
-  if (api.declarativeNetRequest?.updateDynamicRules) {
-    await callExtensionApi(api.declarativeNetRequest.updateDynamicRules.bind(api.declarativeNetRequest), {
-      removeRuleIds: [REDIRECT_RULE_ID]
-    });
-  }
-
-  await writeCdnRedirect(null);
-  return null;
-}
-
-async function setPlaylistRewrite(fromHost, toHost) {
-  const cleanFromHost = sanitizeHost(fromHost);
-  const cleanToHost = sanitizeHost(toHost);
-
-  if (!cleanFromHost || !cleanToHost || cleanFromHost === cleanToHost) {
-    throw new Error("Playlist rewrite requires two different Twitch video CDN hosts.");
-  }
-
-  if (!isVideoDeliveryHost(cleanFromHost) || !isVideoDeliveryHost(cleanToHost)) {
-    throw new Error("Playlist rewrite only supports Twitch video delivery CDN hosts.");
-  }
-
-  const rewrite = {
-    fromHost: cleanFromHost,
-    toHost: cleanToHost,
-    createdAt: Date.now(),
-    rewrittenPlaylists: 0,
-    rewrittenUrls: 0,
-    lastRewriteAt: null
-  };
-
-  await writePlaylistRewrite(rewrite);
-  return rewrite;
-}
-
-async function clearPlaylistRewrite() {
-  await writePlaylistRewrite(null);
-  return null;
-}
-
-async function setVideoProxy(proxyConfig = {}) {
-  const host = String(proxyConfig.host || "").trim();
-  const port = Number.parseInt(proxyConfig.port, 10);
-  const type = proxyConfig.type === "http" ? "http" : "socks";
-
-  if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("Proxy requires a host and port.");
-  }
-
-  const next = {
-    type,
-    host,
-    port,
-    proxyDNS: type === "socks",
-    createdAt: Date.now()
-  };
-
-  await writeVideoProxy(next);
-  return next;
-}
-
-async function clearVideoProxy() {
-  await writeVideoProxy(null);
-  return null;
-}
-
-function getProxyForRequest(requestInfo) {
-  if (!activeVideoProxy) return { type: "direct" };
-
-  let host = "";
+function sendTabMessage(tabId, message) {
   try {
-    host = new URL(requestInfo.url).hostname.toLowerCase();
+    const result = api.tabs.sendMessage(tabId, message);
+    if (result?.catch) result.catch(() => {});
   } catch {
-    return { type: "direct" };
+    // The content script may not be present in this tab.
   }
-
-  if (!isVideoDeliveryHost(host)) return { type: "direct" };
-
-  return {
-    type: activeVideoProxy.type,
-    host: activeVideoProxy.host,
-    port: activeVideoProxy.port,
-    proxyDNS: activeVideoProxy.proxyDNS
-  };
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function maybeRewritePlaylistText(text) {
-  const rewrite = activePlaylistRewrite;
-  if (!rewrite?.fromHost || !rewrite?.toHost || !text.includes(rewrite.fromHost)) {
-    return text;
-  }
-
-  const matcher = new RegExp(escapeRegExp(rewrite.fromHost), "g");
-  const rewritten = text.replace(matcher, rewrite.toHost);
-  const rewrites = (text.match(matcher) || []).length;
-
-  if (rewrites > 0) {
-    activePlaylistRewrite = {
-      ...rewrite,
-      rewrittenPlaylists: (rewrite.rewrittenPlaylists || 0) + 1,
-      rewrittenUrls: (rewrite.rewrittenUrls || 0) + rewrites,
-      lastRewriteAt: Date.now()
-    };
-    writePlaylistRewrite(activePlaylistRewrite).catch(() => {});
-  }
-
-  return rewritten;
-}
-
-function maybeFilterPlaylist(details) {
-  if (!globalThis.browser?.webRequest?.filterResponseData) return;
-  if (!activePlaylistRewrite?.fromHost || !activePlaylistRewrite?.toHost) return;
-
-  let parsed;
-  try {
-    parsed = new URL(details.url);
-  } catch {
-    return;
-  }
-
-  const path = parsed.pathname.toLowerCase();
-  if (!path.endsWith(".m3u8") && !path.includes("/api/channel/hls/")) return;
-
-  const filter = browser.webRequest.filterResponseData(details.requestId);
-  const decoder = new TextDecoder("utf-8");
-  const encoder = new TextEncoder();
-  const chunks = [];
-
-  filter.ondata = (event) => {
-    chunks.push(decoder.decode(event.data, { stream: true }));
-  };
-
-  filter.onstop = () => {
-    try {
-      const original = `${chunks.join("")}${decoder.decode()}`;
-      filter.write(encoder.encode(maybeRewritePlaylistText(original)));
-    } finally {
-      filter.close();
-    }
-  };
-
-  filter.onerror = () => {
-    try {
-      filter.disconnect();
-    } catch {
-      // The stream may already be closed by Firefox.
-    }
-  };
-}
-
-async function clearExpiredAvoidedCdns() {
-  const avoidedCdns = await readAvoidedCdns();
-  const expiredHosts = Object.keys(avoidedCdns)
-    .filter((host) => avoidedCdns[host].expiresAt <= Date.now());
-
-  if (expiredHosts.length) {
-    await clearAvoidedCdn(expiredHosts[0]);
-    for (const host of expiredHosts.slice(1)) {
-      await clearAvoidedCdn(host);
-    }
-  }
-}
-
-async function setClientProfile(profile = "default") {
-  if (!api.declarativeNetRequest?.updateDynamicRules) {
-    throw new Error("This browser does not expose dynamic request rules to the extension.");
-  }
-
-  const cleanProfile = profile === "chrome-windows" ? "chrome-windows" : "default";
-  const update = {
-    removeRuleIds: [CLIENT_RULE_ID]
-  };
-
-  if (cleanProfile === "chrome-windows") {
-    update.addRules = [{
-      id: CLIENT_RULE_ID,
-      priority: 2,
-      action: {
-        type: "modifyHeaders",
-        requestHeaders: [{
-          header: "user-agent",
-          operation: "set",
-          value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-        }]
-      },
-      condition: {
-        urlFilter: "||usher.ttvnw.net^",
-        resourceTypes: [
-          "xmlhttprequest",
-          "other"
-        ]
-      }
-    }];
-  }
-
-  await callExtensionApi(api.declarativeNetRequest.updateDynamicRules.bind(api.declarativeNetRequest), update);
-  await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
-    [CLIENT_PROFILE_STORAGE_KEY]: cleanProfile
-  });
-
-  return { profile: cleanProfile };
 }
 
 function rememberRequest(tabId, sample) {
-  if (tabId < 0) return;
-  if (!isVideoDeliveryHost(sample.host)) return;
+  if (tabId < 0 || !isVideoDeliveryHost(sample.host)) return;
 
   const state = getTabState(tabId);
+  const deliveryType = sample.deliveryType || classifyDelivery(sample.url, sample.type);
   const hostState = state.cdnHosts[sample.host] || {
     count: 0,
     failures: 0,
@@ -662,7 +116,6 @@ function rememberRequest(tabId, sample) {
     lastMs: null,
     lastSeen: null
   };
-  const deliveryType = sample.deliveryType || classifyDelivery(sample.url, sample.type);
 
   hostState.count += 1;
   hostState.failures += sample.ok ? 0 : 1;
@@ -675,11 +128,13 @@ function rememberRequest(tabId, sample) {
   hostState.lastDeliveryType = deliveryType;
   hostState.lastMs = sample.durationMs;
   hostState.lastSeen = sample.endedAt;
-  sample.deliveryType = deliveryType;
 
   state.cdnHosts[sample.host] = hostState;
-  state.recentRequests.unshift(sample);
-  state.recentRequests = state.recentRequests.slice(0, 80);
+  state.recentRequests.unshift({
+    ...sample,
+    deliveryType
+  });
+  state.recentRequests = state.recentRequests.slice(0, 120);
   state.lastUpdated = Date.now();
 
   sendTabMessage(tabId, {
@@ -687,8 +142,6 @@ function rememberRequest(tabId, sample) {
     payload: {
       cdnHosts: state.cdnHosts,
       recentRequests: state.recentRequests,
-      playlistUrls: state.playlistUrls,
-      allocatorHosts: state.allocatorHosts,
       lastUpdated: state.lastUpdated
     }
   });
@@ -696,12 +149,9 @@ function rememberRequest(tabId, sample) {
 
 api.webRequest.onBeforeRequest.addListener(
   (details) => {
-    maybeFilterPlaylist(details);
     if (!isTwitchMediaUrl(details.url)) return;
 
     requestStarts.set(details.requestId, {
-      tabId: details.tabId,
-      url: details.url,
       startedAt: details.timeStamp
     });
   },
@@ -720,11 +170,9 @@ api.webRequest.onCompleted.addListener(
   (details) => {
     const start = requestStarts.get(details.requestId);
     requestStarts.delete(details.requestId);
-
     if (!start || !isTwitchMediaUrl(details.url)) return;
 
     const parsed = new URL(details.url);
-    rememberPlaylistUrl(details.tabId, details.url);
     rememberRequest(details.tabId, {
       url: details.url,
       host: parsed.hostname,
@@ -740,6 +188,7 @@ api.webRequest.onCompleted.addListener(
   {
     urls: [
       "*://*.twitch.tv/*",
+      "*://usher.ttvnw.net/*",
       "*://*.ttvnw.net/*",
       "*://*.jtvnw.net/*",
       "*://*.twitchcdn.net/*"
@@ -752,7 +201,6 @@ api.webRequest.onErrorOccurred.addListener(
   (details) => {
     const start = requestStarts.get(details.requestId);
     requestStarts.delete(details.requestId);
-
     if (!start || !isTwitchMediaUrl(details.url)) return;
 
     const parsed = new URL(details.url);
@@ -764,6 +212,7 @@ api.webRequest.onErrorOccurred.addListener(
       statusCode: null,
       error: details.error,
       ok: false,
+      bytes: 0,
       durationMs: Math.max(0, Math.round(details.timeStamp - start.startedAt)),
       endedAt: Date.now()
     });
@@ -771,6 +220,7 @@ api.webRequest.onErrorOccurred.addListener(
   {
     urls: [
       "*://*.twitch.tv/*",
+      "*://usher.ttvnw.net/*",
       "*://*.ttvnw.net/*",
       "*://*.jtvnw.net/*",
       "*://*.twitchcdn.net/*"
@@ -782,172 +232,14 @@ api.tabs.onRemoved.addListener((tabId) => {
   tabDiagnostics.delete(tabId);
 });
 
-async function handleRuntimeMessage(message, sender) {
-  if (message?.type === "TWITCH_DIAGNOSTICS_GET_NETWORK") {
-    try {
-      const avoidedCdns = await readAvoidedCdns();
-      const cdnRedirect = await readCdnRedirect();
-      const playlistRewrite = await readPlaylistRewrite();
-      const videoProxy = await readVideoProxy();
-      return {
-        ...getTabState(sender.tab?.id ?? -1),
-        avoidedCdns,
-        cdnRedirect,
-        playlistRewrite,
-        videoProxy
-      };
-    } catch (error) {
-      return {
-        ...getTabState(sender.tab?.id ?? -1),
-        avoidedCdns: {},
-        cdnRedirect: null,
-        playlistRewrite: null,
-        videoProxy: null,
-        error: error.message
-      };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_AVOID_CDN") {
-    try {
-      const rule = await applyAvoidedCdnRule(message.host, message.minutes);
-      return { ok: true, rule };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_CLEAR_AVOIDED_CDNS") {
-    try {
-      const avoidedCdns = await clearAvoidedCdn(message.host || null);
-      return { ok: true, avoidedCdns };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_SET_CLIENT_PROFILE") {
-    try {
-      return {
-        ok: true,
-        ...(await setClientProfile(message.profile))
-      };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_SET_CDN_REDIRECT") {
-    try {
-      return {
-        ok: true,
-        redirect: await setCdnRedirect(message.fromHost, message.toHost)
-      };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_CLEAR_CDN_REDIRECT") {
-    try {
-      return {
-        ok: true,
-        redirect: await clearCdnRedirect()
-      };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_SET_PLAYLIST_REWRITE") {
-    try {
-      return {
-        ok: true,
-        rewrite: await setPlaylistRewrite(message.fromHost, message.toHost)
-      };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_CLEAR_PLAYLIST_REWRITE") {
-    try {
-      return {
-        ok: true,
-        rewrite: await clearPlaylistRewrite()
-      };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_SET_VIDEO_PROXY") {
-    try {
-      return {
-        ok: true,
-        proxy: await setVideoProxy(message.proxy)
-      };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_CLEAR_VIDEO_PROXY") {
-    try {
-      return {
-        ok: true,
-        proxy: await clearVideoProxy()
-      };
-    } catch (error) {
-      return { ok: false, error: error.message };
-    }
-  }
-
-  if (message?.type === "TWITCH_DIAGNOSTICS_SAMPLE_PLAYLIST_ALLOCATOR") {
-    return await samplePlaylistAllocator(sender.tab?.id ?? -1);
-  }
-
-  return null;
-}
-
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  const responsePromise = handleRuntimeMessage(message, sender);
-
-  if (globalThis.browser) {
-    return responsePromise;
+  if (message?.type === "TWITCH_DIAGNOSTICS_GET_NETWORK") {
+    sendResponse(getTabState(sender.tab?.id ?? -1));
+    return true;
   }
 
-  responsePromise.then((response) => {
-    if (response !== null) sendResponse(response);
-  });
-  return true;
+  return false;
 });
-
-if (api.alarms?.onAlarm) {
-  api.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name.startsWith("clear-cdn-")) {
-      clearExpiredAvoidedCdns().catch(() => {});
-    }
-  });
-}
-
-clearExpiredAvoidedCdns().catch(() => {});
-readPlaylistRewrite().then((rewrite) => {
-  activePlaylistRewrite = rewrite;
-}).catch(() => {});
-readVideoProxy().then((proxyConfig) => {
-  activeVideoProxy = proxyConfig;
-}).catch(() => {});
-
-if (api.proxy?.onRequest) {
-  api.proxy.onRequest.addListener(getProxyForRequest, {
-    urls: [
-      "*://*.ttvnw.net/*",
-      "*://*.twitchcdn.net/*",
-      "*://*.jtvnw.net/*"
-    ]
-  });
-}
 
 api.action.onClicked.addListener((tab) => {
   if (!tab.id) return;

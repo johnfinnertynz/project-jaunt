@@ -3,96 +3,39 @@
   const state = {
     visible: true,
     compact: false,
+    graphsVisible: false,
     network: {
       cdnHosts: {},
-      recentRequests: [],
-      avoidedCdns: {},
-      cdnRedirect: null,
-      allocatorHosts: {},
-      playlistUrls: [],
-      playlistRewrite: null,
-      videoProxy: null
+      recentRequests: []
     },
     perfSeen: new Set(),
     perfSamples: [],
-    probeSamples: [],
-    logs: [],
-    pendingSwitch: null,
-    switchHistory: [],
-    graphsVisible: false,
     metricHistory: [],
+    logs: [],
     streamKey: ""
   };
 
-  const SELECTORS = {
-    root: "twitch-diagnostics-console"
-  };
-
-  const PENDING_SWITCH_KEY = "twitchDiagnosticsPendingSwitch";
-  const SWITCH_HISTORY_KEY = "twitchDiagnosticsSwitchHistory";
+  const ROOT_ID = "twitch-diagnostics-console";
 
   function fmtMs(value) {
-    if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
-    return `${Math.round(value)} ms`;
+    return Number.isFinite(value) ? `${Math.round(value)} ms` : "n/a";
   }
 
   function fmtSeconds(value) {
-    if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
-    if (value < 0) return "0.0 s";
-    return `${value.toFixed(1)} s`;
+    return Number.isFinite(value) ? `${Math.max(0, value).toFixed(1)} s` : "n/a";
   }
 
   function fmtBitrate(bytesPerSecond) {
-    if (!bytesPerSecond || !Number.isFinite(bytesPerSecond)) return "n/a";
-    const mbps = (bytesPerSecond * 8) / 1_000_000;
-    return `${mbps.toFixed(2)} Mbps`;
+    if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "n/a";
+    return `${((bytesPerSecond * 8) / 1_000_000).toFixed(2)} Mbps`;
   }
 
-  function safeUrlHost(url) {
+  function safeHost(url) {
     try {
-      return new URL(url).hostname;
+      return new URL(url).hostname.toLowerCase();
     } catch {
       return "";
     }
-  }
-
-  function parseCdnHost(input) {
-    const value = String(input || "").trim();
-    if (!value) return "";
-
-    if (/^https?:\/\//i.test(value)) {
-      return safeUrlHost(value).toLowerCase();
-    }
-
-    const withoutMethod = value.replace(/^(GET|POST|HEAD|OPTIONS)\s+/i, "").trim();
-    if (/^https?:\/\//i.test(withoutMethod)) {
-      return safeUrlHost(withoutMethod).toLowerCase();
-    }
-
-    const firstToken = withoutMethod.split(/\s+/)[0].replace(/^\/\//, "");
-    return firstToken.split("/")[0].split("?")[0].toLowerCase();
-  }
-
-  function getCdnEdgeDetails(urlOrHost) {
-    const input = String(urlOrHost || "");
-    const host = parseCdnHost(input);
-    const labels = host.split(".");
-    const isStaticAssetCdn = host === "static-cdn.jtvnw.net" || host.startsWith("static-cdn.");
-    const provider = host.includes("cloudfront") ? "CloudFront" :
-      host.includes("fastly") ? "Fastly" :
-      host.includes("akamaized") ? "Akamai" :
-      host.includes("ttvnw") ? "Twitch" :
-      "unknown";
-    const regionMatch = input.match(/([a-z]{2}-[a-z]+-\d+)/i);
-
-    return {
-      host: host || "n/a",
-      edgeId: labels.length > 4 ? labels[0] : "n/a",
-      provider,
-      role: isStaticAssetCdn ? "static assets" : "video delivery candidate",
-      region: regionMatch?.[1] || "n/a",
-      hostFamily: labels.length > 1 ? labels.slice(1).join(".") : "n/a"
-    };
   }
 
   function isVideoDeliveryHost(host) {
@@ -102,92 +45,17 @@
       (
         host.includes("hls.ttvnw.net") ||
         host.includes("cloudfront.hls.ttvnw.net") ||
+        host.includes("video") ||
+        host.includes("vod") ||
         host.includes("twitchcdn.net") ||
         host.includes("akamaized.net") ||
         host.includes("fastly.net")
       );
   }
 
-  function isMediaPerformanceEntry(entry) {
-    const name = entry.name || "";
-    const host = parseCdnHost(name);
-
-    return isVideoDeliveryHost(host) &&
-      (
-        name.includes(".m3u8") ||
-        name.includes(".ts") ||
-        name.includes(".m4s") ||
-        name.includes("/hls/") ||
-        name.includes("/vod/")
-      );
-  }
-
   function addLog(message) {
-    const now = new Date();
-    state.logs.unshift(`[${now.toLocaleTimeString()}] ${message}`);
-    state.logs = state.logs.slice(0, 80);
-  }
-
-  function getStreamKey() {
-    const path = location.pathname.replace(/\/+$/, "") || "/";
-    const parts = path.split("/").filter(Boolean);
-
-    if (parts[0] === "videos" && parts[1]) return `vod:${parts[1]}`;
-    if (parts[0] === "directory") return `directory:${location.pathname}`;
-    if (parts[0]) return `channel:${parts[0].toLowerCase()}`;
-    return "home";
-  }
-
-  function clearSessionDiagnostics(reason, options = {}) {
-    state.network = {
-      ...state.network,
-      cdnHosts: {},
-      recentRequests: []
-    };
-    state.perfSeen = new Set();
-    state.perfSamples = [];
-    state.probeSamples = [];
-    state.metricHistory = [];
-    if (!options.preserveSwitchTracking) {
-      state.pendingSwitch = null;
-      state.switchHistory = [];
-      saveSwitchState();
-    }
-
-    const input = document.querySelector("#twitch-diagnostics-console [data-cdn-input]");
-    if (input) input.value = "";
-
-    addLog(reason);
-  }
-
-  function detectStreamChange() {
-    const nextKey = getStreamKey();
-    if (!state.streamKey) {
-      state.streamKey = nextKey;
-      return;
-    }
-
-    if (state.streamKey === nextKey) return;
-
-    const previousKey = state.streamKey;
-    state.streamKey = nextKey;
-    clearSessionDiagnostics(`Stream changed from ${previousKey} to ${nextKey}; cleared CDN diagnostics.`);
-    render();
-  }
-
-  function loadSwitchState() {
-    try {
-      state.pendingSwitch = JSON.parse(sessionStorage.getItem(PENDING_SWITCH_KEY) || "null");
-      state.switchHistory = JSON.parse(sessionStorage.getItem(SWITCH_HISTORY_KEY) || "[]").slice(0, 10);
-    } catch {
-      state.pendingSwitch = null;
-      state.switchHistory = [];
-    }
-  }
-
-  function saveSwitchState() {
-    sessionStorage.setItem(PENDING_SWITCH_KEY, JSON.stringify(state.pendingSwitch));
-    sessionStorage.setItem(SWITCH_HISTORY_KEY, JSON.stringify(state.switchHistory.slice(0, 10)));
+    state.logs.unshift(`[${new Date().toLocaleTimeString()}] ${message}`);
+    state.logs = state.logs.slice(0, 120);
   }
 
   function getVideo() {
@@ -196,7 +64,7 @@
   }
 
   function getBufferedAhead(video) {
-    if (!video || !video.buffered?.length) return null;
+    if (!video?.buffered?.length || !Number.isFinite(video.currentTime)) return null;
 
     for (let i = 0; i < video.buffered.length; i += 1) {
       const start = video.buffered.start(i);
@@ -209,105 +77,49 @@
     return 0;
   }
 
-  function getLiveLatency(video) {
-    if (!video || !video.seekable?.length) return null;
+  function getLiveEdgeGap(video) {
+    if (!video) return null;
+    const bufferAhead = getBufferedAhead(video);
+    if (Number.isFinite(bufferAhead)) return bufferAhead;
+    if (!video.seekable?.length || !Number.isFinite(video.currentTime)) return null;
 
-    const currentTime = video.currentTime;
-    if (!Number.isFinite(currentTime)) return null;
-
-    let liveEdge = null;
-    let activeRangeStart = null;
-
-    for (let i = 0; i < video.seekable.length; i += 1) {
-      const start = video.seekable.start(i);
-      const end = video.seekable.end(i);
-
-      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
-
-      if (currentTime >= start && currentTime <= end) {
-        activeRangeStart = start;
-        liveEdge = end;
-        break;
-      }
-
-      liveEdge = end;
-      activeRangeStart = start;
-    }
-
-    if (!Number.isFinite(liveEdge)) {
-      const bufferAhead = getBufferedAhead(video);
-      return bufferAhead !== null ? Math.max(0, bufferAhead) : null;
-    }
-
-    const latency = liveEdge - currentTime;
-    const activeWindow = activeRangeStart !== null ? liveEdge - activeRangeStart : null;
-
-    if (!Number.isFinite(latency) || latency < 0) {
-      const bufferAhead = getBufferedAhead(video);
-      return bufferAhead !== null ? Math.max(0, bufferAhead) : null;
-    }
-
-    // Twitch sometimes exposes absolute media timelines. Those produce huge
-    // offsets that are not meaningful user-facing live latency values. In that
-    // case, show the buffered distance to the current media edge instead.
-    if (latency > 300) {
-      const bufferAhead = getBufferedAhead(video);
-      return bufferAhead !== null ? Math.max(0, bufferAhead) : null;
-    }
-    if (activeWindow !== null && activeWindow > 0 && latency > activeWindow + 5) return null;
-
-    return latency;
+    const end = video.seekable.end(video.seekable.length - 1);
+    const gap = end - video.currentTime;
+    return Number.isFinite(gap) && gap >= 0 && gap < 300 ? gap : null;
   }
 
-  function getVideoQuality(video) {
-    if (!video?.getVideoPlaybackQuality) return null;
-
+  function getPlaybackQuality(video) {
     try {
-      return video.getVideoPlaybackQuality();
+      return video?.getVideoPlaybackQuality?.() || null;
     } catch {
       return null;
     }
   }
 
-  function capturePerformanceEntries() {
-    const entries = performance.getEntriesByType("resource").filter(isMediaPerformanceEntry);
+  function isMediaPerformanceEntry(entry) {
+    const url = entry.name || "";
+    const host = safeHost(url);
+    return isVideoDeliveryHost(host) &&
+      (url.includes(".m3u8") || url.includes(".ts") || url.includes(".m4s") || url.includes("/hls/") || url.includes("/vod/"));
+  }
 
-    for (const entry of entries) {
+  function capturePerformanceEntries() {
+    for (const entry of performance.getEntriesByType("resource").filter(isMediaPerformanceEntry)) {
       if (state.perfSeen.has(entry.name)) continue;
 
       state.perfSeen.add(entry.name);
       state.perfSamples.unshift({
-        host: safeUrlHost(entry.name),
+        host: safeHost(entry.name),
         url: entry.name,
         durationMs: Math.round(entry.duration || 0),
         transferSize: entry.transferSize || 0,
         encodedBodySize: entry.encodedBodySize || 0,
         decodedBodySize: entry.decodedBodySize || 0,
-        startTime: Math.round(entry.startTime || 0),
         seenAt: Date.now()
       });
     }
 
     state.perfSamples = state.perfSamples.slice(0, 120);
-  }
-
-  function getDominantCdn() {
-    const hosts = getVideoCdnHosts();
-    const hostRows = Object.entries(hosts)
-      .map(([host, stats]) => ({
-        host,
-        count: stats.count || 0,
-        avgMs: stats.count ? stats.totalMs / stats.count : null,
-        lastMs: stats.lastMs,
-        lastStatus: stats.lastStatus,
-        lastSeen: stats.lastSeen
-      }))
-      .sort((a, b) => b.count - a.count);
-
-    if (hostRows[0]) return hostRows[0];
-
-    const perfHost = state.perfSamples.find((sample) => isVideoDeliveryHost(sample.host))?.host;
-    return perfHost ? { host: perfHost, count: 0, avgMs: null } : null;
   }
 
   function getVideoCdnHosts() {
@@ -317,195 +129,68 @@
     );
   }
 
-  function getVideoRecentRequests() {
+  function getVideoRequests() {
     return (state.network.recentRequests || [])
-      .filter((request) => isVideoDeliveryHost(request.host || parseCdnHost(request.url)));
+      .filter((request) => isVideoDeliveryHost(request.host || safeHost(request.url)));
   }
 
-  function getPrimaryDeliveryType(stats) {
-    const entries = Object.entries(stats.deliveryTypes || {});
-    if (!entries.length) return stats.lastDeliveryType || "unknown";
-
-    return entries
-      .sort(([, a], [, b]) => b - a)[0][0];
-  }
-
-  function summarizeHostStats(host, stats = null) {
-    const source = stats || state.network.cdnHosts?.[host] || {};
-    const count = source.count || 0;
-
-    return {
-      host: host || "n/a",
-      count,
-      failures: source.failures || 0,
-      avgMs: count ? source.totalMs / count : null,
-      lastMs: source.lastMs ?? null,
-      lastStatus: source.lastStatus ?? null,
-      lastSeen: source.lastSeen ?? null
-    };
-  }
-
-  function getBestRedirectTarget(fromHost) {
-    const observedTargets = Object.entries(getVideoCdnHosts())
-      .filter(([host, stats]) => host !== fromHost && (stats.count || 0) > 0)
+  function getDominantCdn() {
+    const rows = Object.entries(getVideoCdnHosts())
       .map(([host, stats]) => ({
         host,
-        avgMs: stats.count ? stats.totalMs / stats.count : Number.POSITIVE_INFINITY,
-        lastMs: Number.isFinite(stats.lastMs) ? stats.lastMs : Number.POSITIVE_INFINITY,
         count: stats.count || 0,
-        serving: getPrimaryDeliveryType(stats)
+        avgMs: stats.count ? stats.totalMs / stats.count : null,
+        lastMs: stats.lastMs,
+        lastStatus: stats.lastStatus
       }))
-      .sort((a, b) => {
-        const aSegment = a.serving === "video segment" ? 0 : 1;
-        const bSegment = b.serving === "video segment" ? 0 : 1;
-        return aSegment - bSegment || a.avgMs - b.avgMs || b.count - a.count;
-      });
-    const allocatorTargets = Object.values(state.network.allocatorHosts || {})
-      .filter((item) => item.host !== fromHost && isVideoDeliveryHost(item.host))
-      .map((item) => ({
-        host: item.host,
-        avgMs: Number.POSITIVE_INFINITY,
-        lastMs: Number.POSITIVE_INFINITY,
-        count: item.count || 0,
-        serving: "allocator"
-      }));
+      .sort((a, b) => b.count - a.count);
 
-    return [...observedTargets, ...allocatorTargets]
-      .sort((a, b) => {
-        const aSegment = a.serving === "video segment" ? 0 : a.serving === "allocator" ? 1 : 2;
-        const bSegment = b.serving === "video segment" ? 0 : b.serving === "allocator" ? 1 : 2;
-        return aSegment - bSegment || a.avgMs - b.avgMs || b.count - a.count;
-      })[0]?.host || "";
+    if (rows[0]) return rows[0];
+
+    const perfHost = state.perfSamples.find((sample) => isVideoDeliveryHost(sample.host))?.host;
+    return perfHost ? { host: perfHost, count: 0, avgMs: null, lastMs: null } : null;
   }
 
-  function updateSwitchTracking(diagnostics) {
-    const pending = state.pendingSwitch;
-    const currentHost = diagnostics.cdn.dominant?.host;
+  function getResponsiveness() {
+    const samples = Object.values(getVideoCdnHosts())
+      .map((stats) => stats.lastMs)
+      .filter(Number.isFinite);
 
-    if (!pending) return false;
-
-    if (Date.now() - pending.startedAt > 10 * 60 * 1000) {
-      state.pendingSwitch = null;
-      addLog("CDN switch tracking expired before a new CDN was detected.");
-      saveSwitchState();
-      return true;
-    }
-
-    if (!currentHost || currentHost === pending.old.host) return false;
-
-    const nextStats = summarizeHostStats(currentHost);
-    const avgDelta = pending.old.avgMs !== null && nextStats.avgMs !== null
-      ? nextStats.avgMs - pending.old.avgMs
-      : null;
-    const lastDelta = pending.old.lastMs !== null && nextStats.lastMs !== null
-      ? nextStats.lastMs - pending.old.lastMs
-      : null;
-
-    state.switchHistory.unshift({
-      old: pending.old,
-      new: nextStats,
-      avgDelta,
-      lastDelta,
-      switchedAt: Date.now()
-    });
-    state.switchHistory = state.switchHistory.slice(0, 10);
-    state.pendingSwitch = null;
-    addLog(`CDN switched from ${pending.old.host} to ${nextStats.host}.`);
-    saveSwitchState();
-    return true;
-  }
-
-  function getResponsivenessSummary() {
-    const dominant = getDominantCdn();
-    const samples = [
-      ...Object.values(getVideoCdnHosts())
-        .filter((stats) => stats.lastMs !== null && stats.lastMs !== undefined)
-        .map((stats) => stats.lastMs),
-      ...state.probeSamples.map((sample) => sample.durationMs)
-    ].filter((value) => Number.isFinite(value));
-
-    if (!samples.length) return { label: "n/a", status: "warn", dominant };
-
-    const avg = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+    if (!samples.length) return "n/a";
+    const avg = samples.reduce((sum, item) => sum + item, 0) / samples.length;
     const sorted = [...samples].sort((a, b) => a - b);
     const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
-    const status = avg < 250 && p95 < 650 ? "good" : avg < 600 && p95 < 1200 ? "warn" : "bad";
-
-    return {
-      label: `${Math.round(avg)} ms avg / ${Math.round(p95)} ms p95`,
-      status,
-      dominant
-    };
+    return `${Math.round(avg)} ms avg / ${Math.round(p95)} ms p95`;
   }
 
-  function getBandwidthEstimate() {
+  function getThroughput() {
     const now = Date.now();
-    const recentNetwork = getVideoRecentRequests().filter((sample) => now - sample.endedAt < 30000);
-    const networkBytes = recentNetwork.reduce((sum, sample) => sum + (sample.bytes || 0), 0);
+    const networkBytes = getVideoRequests()
+      .filter((request) => now - request.endedAt < 30000)
+      .reduce((sum, request) => sum + (request.bytes || 0), 0);
 
     if (networkBytes > 0) return networkBytes / 30;
 
-    const recent = state.perfSamples.filter((sample) => now - sample.seenAt < 30000 && isVideoDeliveryHost(sample.host));
-    const totalBytes = recent.reduce((sum, sample) => sum + (sample.transferSize || sample.encodedBodySize || sample.decodedBodySize || 0), 0);
+    const perfBytes = state.perfSamples
+      .filter((sample) => now - sample.seenAt < 30000)
+      .reduce((sum, sample) => sum + (sample.transferSize || sample.encodedBodySize || sample.decodedBodySize || 0), 0);
 
-    return totalBytes > 0 ? totalBytes / 30 : null;
+    return perfBytes > 0 ? perfBytes / 30 : null;
   }
 
-  function getLatestResponseMs() {
-    const latest = getVideoRecentRequests()
-      .find((sample) => Number.isFinite(sample.durationMs));
-
-    return latest?.durationMs ?? null;
-  }
-
-  function addMetricSample(diagnostics) {
-    const latestTotalFrames = diagnostics.playback.totalVideoFrames;
-    const latestDroppedFrames = diagnostics.playback.droppedVideoFrames;
-    const previous = state.metricHistory[state.metricHistory.length - 1];
-    let droppedDelta = null;
-
-    if (
-      previous &&
-      Number.isFinite(latestTotalFrames) &&
-      Number.isFinite(latestDroppedFrames) &&
-      Number.isFinite(previous.totalFrames) &&
-      Number.isFinite(previous.droppedFrames)
-    ) {
-      const frameDelta = latestTotalFrames - previous.totalFrames;
-      const dropFrameDelta = latestDroppedFrames - previous.droppedFrames;
-      droppedDelta = frameDelta > 0 ? (dropFrameDelta / frameDelta) * 100 : 0;
-    }
-
-    state.metricHistory.push({
-      t: Date.now(),
-      buffer: diagnostics.playback.bufferAhead,
-      latency: diagnostics.playback.liveLatency,
-      responseMs: getLatestResponseMs(),
-      throughputMbps: diagnostics.performance.estimatedRecentThroughput
-        ? (diagnostics.performance.estimatedRecentThroughput * 8) / 1_000_000
-        : null,
-      droppedPct: droppedDelta,
-      totalFrames: latestTotalFrames,
-      droppedFrames: latestDroppedFrames
-    });
-
-    state.metricHistory = state.metricHistory.slice(-90);
+  function getPrimaryDeliveryType(stats) {
+    return Object.entries(stats.deliveryTypes || {})
+      .sort(([, a], [, b]) => b - a)[0]?.[0] || stats.lastDeliveryType || "unknown";
   }
 
   function getDiagnostics() {
     capturePerformanceEntries();
 
     const video = getVideo();
-    const quality = getVideoQuality(video);
-    const responsiveness = getResponsivenessSummary();
-    const dropped = quality ? quality.droppedVideoFrames : null;
-    const total = quality ? quality.totalVideoFrames : null;
-    const droppedPct = total ? ((dropped / total) * 100).toFixed(2) : null;
-
-    const recentVideoRequests = getVideoRecentRequests();
-    const recentUrl = recentVideoRequests[0]?.url ||
-      state.perfSamples.find((sample) => isVideoDeliveryHost(sample.host))?.url ||
-      responsiveness.dominant?.host;
+    const quality = getPlaybackQuality(video);
+    const dominant = getDominantCdn();
+    const dropped = quality?.droppedVideoFrames ?? null;
+    const total = quality?.totalVideoFrames ?? null;
 
     return {
       page: {
@@ -519,50 +204,69 @@
         readyState: video ? video.readyState : null,
         networkState: video ? video.networkState : null,
         currentTime: video ? video.currentTime : null,
-        duration: video ? video.duration : null,
-        playbackRate: video ? video.playbackRate : null,
         bufferAhead: getBufferedAhead(video),
-        liveLatency: getLiveLatency(video),
+        liveEdgeGap: getLiveEdgeGap(video),
         droppedVideoFrames: dropped,
         totalVideoFrames: total,
-        droppedFramePercent: droppedPct
-      },
-      network: state.network,
-      performance: {
-        recentMediaEntries: state.perfSamples.slice(0, 40),
-        estimatedRecentThroughput: getBandwidthEstimate()
+        droppedFramePercent: total ? ((dropped / total) * 100).toFixed(2) : null
       },
       cdn: {
-        dominant: responsiveness.dominant,
-        responsiveness: responsiveness.label,
-        edge: getCdnEdgeDetails(recentUrl || responsiveness.dominant?.host),
-        status: responsiveness.status,
-        probes: state.probeSamples.slice(0, 20),
-        avoidedCdns: state.network.avoidedCdns || {},
-        cdnRedirect: state.network.cdnRedirect || null,
-        playlistRewrite: state.network.playlistRewrite || null,
-        videoProxy: state.network.videoProxy || null,
-        pendingSwitch: state.pendingSwitch,
-        switchHistory: state.switchHistory.slice(0, 10)
+        dominant,
+        responsiveness: getResponsiveness(),
+        hosts: getVideoCdnHosts(),
+        recentRequests: getVideoRequests().slice(0, 80)
       },
-      logs: state.logs.slice(0, 40)
+      performance: {
+        estimatedRecentThroughput: getThroughput(),
+        recentMediaEntries: state.perfSamples.slice(0, 40)
+      },
+      logs: state.logs.slice(0, 80)
     };
   }
 
   function statusClass(diagnostics) {
     if (!diagnostics.playback.foundVideo) return "tdc-status-warn";
-    if (diagnostics.playback.bufferAhead !== null && diagnostics.playback.bufferAhead < 2) return "tdc-status-bad";
-    if (diagnostics.cdn.status === "bad") return "tdc-status-bad";
-    if (diagnostics.playback.bufferAhead !== null && diagnostics.playback.bufferAhead < 6) return "tdc-status-warn";
-    if (diagnostics.cdn.status === "warn") return "tdc-status-warn";
+    if (Number.isFinite(diagnostics.playback.bufferAhead) && diagnostics.playback.bufferAhead < 2) return "tdc-status-bad";
+    if (Number.isFinite(diagnostics.playback.bufferAhead) && diagnostics.playback.bufferAhead < 6) return "tdc-status-warn";
     return "tdc-status-good";
   }
 
+  function getStreamKey() {
+    const parts = location.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+    if (parts[0] === "videos" && parts[1]) return `vod:${parts[1]}`;
+    if (parts[0]) return `channel:${parts[0].toLowerCase()}`;
+    return "home";
+  }
+
+  function clearSession(reason = "Diagnostics cleared.") {
+    state.network = { cdnHosts: {}, recentRequests: [] };
+    state.perfSeen = new Set();
+    state.perfSamples = [];
+    state.metricHistory = [];
+    state.logs = [];
+    addLog(reason);
+  }
+
+  function detectStreamChange() {
+    const next = getStreamKey();
+    if (!state.streamKey) {
+      state.streamKey = next;
+      return;
+    }
+
+    if (state.streamKey !== next) {
+      const previous = state.streamKey;
+      state.streamKey = next;
+      clearSession(`Stream changed from ${previous} to ${next}; reset diagnostics.`);
+      render();
+    }
+  }
+
   function createPanel() {
-    if (document.getElementById(SELECTORS.root)) return;
+    if (document.getElementById(ROOT_ID)) return;
 
     const root = document.createElement("section");
-    root.id = SELECTORS.root;
+    root.id = ROOT_ID;
     root.innerHTML = `
       <div class="tdc-header" data-drag-handle>
         <span class="tdc-status" data-status></span>
@@ -572,127 +276,34 @@
       </div>
       <div class="tdc-body">
         <div class="tdc-grid">
-          <div class="tdc-card">
-            <div class="tdc-label">Buffer Ahead</div>
-            <div class="tdc-value" data-buffer>n/a</div>
-          </div>
-          <div class="tdc-card">
-            <div class="tdc-label">CDN Responsiveness</div>
-            <div class="tdc-value" data-responsiveness>n/a</div>
-          </div>
-          <div class="tdc-card tdc-card-wide">
-            <div class="tdc-label">Connected CDN</div>
-            <div class="tdc-value" data-cdn>n/a</div>
-          </div>
-          <div class="tdc-card tdc-card-wide">
-            <div class="tdc-label">Current Edge</div>
-            <div class="tdc-value" data-cdn-edge>n/a</div>
-          </div>
-          <div class="tdc-card">
-            <div class="tdc-label">Live Latency</div>
-            <div class="tdc-value" data-latency>n/a</div>
-          </div>
-          <div class="tdc-card">
-            <div class="tdc-label">Dropped Frames</div>
-            <div class="tdc-value" data-drops>n/a</div>
-          </div>
-          <div class="tdc-card">
-            <div class="tdc-label">Recent Throughput</div>
-            <div class="tdc-value" data-throughput>n/a</div>
-          </div>
-          <div class="tdc-card">
-            <div class="tdc-label">Playback State</div>
-            <div class="tdc-value" data-playback>n/a</div>
-          </div>
+          <div class="tdc-card"><div class="tdc-label">Buffer Ahead</div><div class="tdc-value" data-buffer>n/a</div></div>
+          <div class="tdc-card"><div class="tdc-label">CDN Responsiveness</div><div class="tdc-value" data-responsiveness>n/a</div></div>
+          <div class="tdc-card tdc-card-wide"><div class="tdc-label">Connected CDN</div><div class="tdc-value" data-cdn>n/a</div></div>
+          <div class="tdc-card"><div class="tdc-label">Live Edge Gap</div><div class="tdc-value" data-latency>n/a</div></div>
+          <div class="tdc-card"><div class="tdc-label">Dropped Frames</div><div class="tdc-value" data-drops>n/a</div></div>
+          <div class="tdc-card"><div class="tdc-label">Recent Throughput</div><div class="tdc-value" data-throughput>n/a</div></div>
+          <div class="tdc-card"><div class="tdc-label">Playback State</div><div class="tdc-value" data-playback>n/a</div></div>
         </div>
         <div class="tdc-tools">
-          <button class="tdc-button" type="button" data-probe>Probe CDN</button>
-          <button class="tdc-button" type="button" data-discover-alternates>Discover Alternatives</button>
-          <button class="tdc-button tdc-danger" type="button" data-rewrite-playlist>Rewrite Playlist CDN</button>
-          <button class="tdc-button" type="button" data-clear-rewrite>Clear Rewrite</button>
           <button class="tdc-button" type="button" data-toggle-graphs>Show Graphs</button>
           <button class="tdc-button" type="button" data-copy>Copy JSON</button>
           <button class="tdc-button" type="button" data-export>Download JSON</button>
           <button class="tdc-button" type="button" data-clear>Clear</button>
         </div>
-        <div class="tdc-manual">
-          <select class="tdc-input" data-proxy-type>
-            <option value="socks">SOCKS</option>
-            <option value="http">HTTP</option>
-          </select>
-          <input class="tdc-input" type="text" data-proxy-host placeholder="Proxy host">
-          <input class="tdc-input" type="number" min="1" max="65535" data-proxy-port placeholder="Port">
-          <button class="tdc-button tdc-danger" type="button" data-use-proxy>Use Video Proxy</button>
-          <button class="tdc-button" type="button" data-clear-proxy>Clear Proxy</button>
-        </div>
-        <div class="tdc-card" style="margin-top: 8px;">
-          <div class="tdc-label">Active Video Proxy</div>
-          <div class="tdc-value" data-video-proxy>none</div>
-        </div>
-        <div class="tdc-card" style="margin-top: 8px;">
-          <div class="tdc-label">Active Playlist Rewrite</div>
-          <div class="tdc-value" data-playlist-rewrite>none</div>
-        </div>
-        <div class="tdc-card" style="margin-top: 8px;">
-          <div class="tdc-label">Discovered Playlist Hosts</div>
-          <div class="tdc-value" data-allocator-hosts>none</div>
-        </div>
-        <div class="tdc-card" style="margin-top: 8px;">
-          <div class="tdc-label">CDN Switch Comparison</div>
-          <div class="tdc-switch" data-switch-summary>Run Avoid CDN + Reload to compare old vs new CDN stats.</div>
-          <table class="tdc-table">
-            <thead>
-              <tr>
-                <th>CDN</th>
-                <th>Avg</th>
-                <th>Last</th>
-                <th>Req</th>
-                <th>Fail</th>
-              </tr>
-            </thead>
-            <tbody data-switch-table>
-              <tr><td colspan="5" class="tdc-muted">No switch captured yet.</td></tr>
-            </tbody>
-          </table>
-        </div>
         <div class="tdc-card tdc-graphs tdc-hidden-section" data-graphs>
           <div class="tdc-label">Rolling Graphs</div>
           <div class="tdc-chart-grid">
-            <div>
-              <div class="tdc-chart-title">Buffer ahead</div>
-              <svg class="tdc-chart" data-chart-buffer viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
-              <div class="tdc-chart-readout" data-readout-buffer>hover for value</div>
-            </div>
-            <div>
-              <div class="tdc-chart-title">CDN response</div>
-              <svg class="tdc-chart" data-chart-response viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
-              <div class="tdc-chart-readout" data-readout-response>hover for value</div>
-            </div>
-            <div>
-              <div class="tdc-chart-title">Throughput</div>
-              <svg class="tdc-chart" data-chart-throughput viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
-              <div class="tdc-chart-readout" data-readout-throughput>hover for value</div>
-            </div>
-            <div>
-              <div class="tdc-chart-title">Dropped frames</div>
-              <svg class="tdc-chart" data-chart-drops viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
-              <div class="tdc-chart-readout" data-readout-drops>hover for value</div>
-            </div>
+            <div><div class="tdc-chart-title">Buffer ahead</div><svg class="tdc-chart" data-chart-buffer viewBox="0 0 220 72" preserveAspectRatio="none"></svg><div class="tdc-chart-readout" data-readout-buffer>hover for value</div></div>
+            <div><div class="tdc-chart-title">CDN response</div><svg class="tdc-chart" data-chart-response viewBox="0 0 220 72" preserveAspectRatio="none"></svg><div class="tdc-chart-readout" data-readout-response>hover for value</div></div>
+            <div><div class="tdc-chart-title">Throughput</div><svg class="tdc-chart" data-chart-throughput viewBox="0 0 220 72" preserveAspectRatio="none"></svg><div class="tdc-chart-readout" data-readout-throughput>hover for value</div></div>
+            <div><div class="tdc-chart-title">Dropped frames</div><svg class="tdc-chart" data-chart-drops viewBox="0 0 220 72" preserveAspectRatio="none"></svg><div class="tdc-chart-readout" data-readout-drops>hover for value</div></div>
           </div>
         </div>
         <div class="tdc-optional">
           <div class="tdc-card">
             <div class="tdc-label">CDN Requests</div>
             <table class="tdc-table">
-              <thead>
-                <tr>
-                  <th>Host</th>
-                  <th>Serving</th>
-                  <th>Count</th>
-                  <th>Last</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Host</th><th>Serving</th><th>Count</th><th>Last</th><th>Status</th></tr></thead>
               <tbody data-cdn-table></tbody>
             </table>
           </div>
@@ -714,33 +325,25 @@
       state.visible = false;
       render();
     });
-
     root.querySelector("[data-compact]").addEventListener("click", () => {
       state.compact = !state.compact;
       render();
     });
-
     root.querySelector("[data-clear]").addEventListener("click", () => {
-      state.network = { ...state.network, cdnHosts: {}, recentRequests: [] };
-      state.perfSamples = [];
-      state.perfSeen = new Set();
-      state.probeSamples = [];
-      state.logs = [];
-      addLog("Diagnostics history cleared.");
+      clearSession();
       render();
     });
-
+    root.querySelector("[data-toggle-graphs]").addEventListener("click", () => {
+      state.graphsVisible = !state.graphsVisible;
+      render();
+    });
     root.querySelector("[data-copy]").addEventListener("click", async () => {
-      const payload = JSON.stringify(getDiagnostics(), null, 2);
-      await navigator.clipboard.writeText(payload);
+      await navigator.clipboard.writeText(JSON.stringify(getDiagnostics(), null, 2));
       addLog("Diagnostics JSON copied to clipboard.");
       render();
     });
-
     root.querySelector("[data-export]").addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify(getDiagnostics(), null, 2)], {
-        type: "application/json"
-      });
+      const blob = new Blob([JSON.stringify(getDiagnostics(), null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -750,41 +353,6 @@
       addLog("Diagnostics JSON downloaded.");
       render();
     });
-
-    root.querySelector("[data-probe]").addEventListener("click", async () => {
-      await probeCdn();
-      render();
-    });
-
-    root.querySelector("[data-rewrite-playlist]").addEventListener("click", async () => {
-      await rewritePlaylistCdn();
-    });
-
-    root.querySelector("[data-discover-alternates]").addEventListener("click", async () => {
-      await discoverAlternates();
-      render();
-    });
-
-    root.querySelector("[data-clear-rewrite]").addEventListener("click", async () => {
-      await clearPlaylistRewrite();
-      render();
-    });
-
-    root.querySelector("[data-use-proxy]").addEventListener("click", async () => {
-      await setVideoProxy(root);
-      render();
-    });
-
-    root.querySelector("[data-clear-proxy]").addEventListener("click", async () => {
-      await clearVideoProxy();
-      render();
-    });
-
-    root.querySelector("[data-toggle-graphs]").addEventListener("click", () => {
-      state.graphsVisible = !state.graphsVisible;
-      render();
-    });
-
     makeDraggable(root);
   }
 
@@ -795,488 +363,66 @@
     handle.addEventListener("pointerdown", (event) => {
       if (event.target.closest("button")) return;
       const rect = root.getBoundingClientRect();
-      start = {
-        pointerId: event.pointerId,
-        x: event.clientX,
-        y: event.clientY,
-        left: rect.left,
-        top: rect.top
-      };
+      start = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
       handle.setPointerCapture(event.pointerId);
     });
-
     handle.addEventListener("pointermove", (event) => {
       if (!start || event.pointerId !== start.pointerId) return;
-      const left = Math.max(0, Math.min(window.innerWidth - root.offsetWidth, start.left + event.clientX - start.x));
-      const top = Math.max(0, Math.min(window.innerHeight - 48, start.top + event.clientY - start.y));
-
-      root.style.left = `${left}px`;
-      root.style.top = `${top}px`;
+      root.style.left = `${Math.max(0, Math.min(window.innerWidth - root.offsetWidth, start.left + event.clientX - start.x))}px`;
+      root.style.top = `${Math.max(0, Math.min(window.innerHeight - 48, start.top + event.clientY - start.y))}px`;
       root.style.right = "auto";
       root.style.bottom = "auto";
     });
-
     handle.addEventListener("pointerup", () => {
       start = null;
     });
   }
 
-  async function probeCdn() {
-    const diagnostics = getDiagnostics();
-    const candidate = getVideoRecentRequests()[0]?.url ||
-      diagnostics.performance.recentMediaEntries[0]?.url;
+  function addMetricSample(diagnostics) {
+    const previous = state.metricHistory[state.metricHistory.length - 1];
+    let droppedPct = null;
 
-    if (!candidate) {
-      addLog("No CDN URL available to probe yet. Start playback and try again.");
-      return;
+    if (previous && Number.isFinite(diagnostics.playback.totalVideoFrames) && Number.isFinite(diagnostics.playback.droppedVideoFrames)) {
+      const frameDelta = diagnostics.playback.totalVideoFrames - previous.totalFrames;
+      const dropDelta = diagnostics.playback.droppedVideoFrames - previous.droppedFrames;
+      droppedPct = frameDelta > 0 ? (dropDelta / frameDelta) * 100 : 0;
     }
 
-    const startedAt = performance.now();
-    try {
-      await fetch(candidate, {
-        method: "GET",
-        mode: "no-cors",
-        cache: "no-store",
-        credentials: "omit"
-      });
-      const durationMs = Math.round(performance.now() - startedAt);
-      state.probeSamples.unshift({
-        host: safeUrlHost(candidate),
-        durationMs,
-        ok: true,
-        testedAt: Date.now()
-      });
-      addLog(`CDN probe completed in ${durationMs} ms for ${safeUrlHost(candidate)}.`);
-    } catch (error) {
-      const durationMs = Math.round(performance.now() - startedAt);
-      state.probeSamples.unshift({
-        host: safeUrlHost(candidate),
-        durationMs,
-        ok: false,
-        error: error.message,
-        testedAt: Date.now()
-      });
-      addLog(`CDN probe failed after ${durationMs} ms: ${error.message}`);
-    }
-
-    state.probeSamples = state.probeSamples.slice(0, 30);
-  }
-
-  function sendRuntimeMessage(message) {
-    return new Promise((resolve, reject) => {
-      try {
-        if (globalThis.browser?.runtime?.sendMessage) {
-          api.runtime.sendMessage(message).then(resolve).catch(reject);
-          return;
-        }
-
-        api.runtime.sendMessage(message, (response) => {
-          const error = api.runtime.lastError;
-          if (error) reject(new Error(error.message));
-          else resolve(response);
-        });
-      } catch (error) {
-        reject(error);
-      }
+    state.metricHistory.push({
+      t: Date.now(),
+      buffer: diagnostics.playback.bufferAhead,
+      responseMs: diagnostics.cdn.dominant?.lastMs ?? null,
+      throughputMbps: diagnostics.performance.estimatedRecentThroughput ? (diagnostics.performance.estimatedRecentThroughput * 8) / 1_000_000 : null,
+      droppedPct,
+      totalFrames: diagnostics.playback.totalVideoFrames,
+      droppedFrames: diagnostics.playback.droppedVideoFrames
     });
-  }
-
-  async function avoidCurrentCdn() {
-    const diagnostics = getDiagnostics();
-    const host = diagnostics.cdn.dominant?.host || parseCdnHost(getVideoRecentRequests()[0]?.url);
-
-    await avoidSpecificCdn(host);
-  }
-
-  async function renegotiateCdn() {
-    const diagnostics = getDiagnostics();
-    const host = diagnostics.cdn.dominant?.host || parseCdnHost(getVideoRecentRequests()[0]?.url);
-
-    if (host) {
-      state.pendingSwitch = {
-        old: summarizeHostStats(host),
-        oldEdge: getCdnEdgeDetails(host),
-        startedAt: Date.now(),
-        url: location.href
-      };
-      saveSwitchState();
-    }
-
-    await clearAvoidedCdns();
-    clearSessionDiagnostics("Forcing clean Twitch player negotiation without blocking the current CDN.", {
-      preserveSwitchTracking: Boolean(host)
-    });
-    addLog("Reloading Twitch. If the same CDN returns, try Chrome Client, then Renegotiate CDN again.");
-    window.setTimeout(() => location.reload(), 500);
-  }
-
-  async function setClientProfile(profile) {
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_SET_CLIENT_PROFILE",
-      profile
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not set client profile: ${response?.error || "unknown error"}`);
-      render();
-      return;
-    }
-
-    addLog(response.profile === "chrome-windows"
-      ? "Applied experimental Chrome-like client profile to Twitch playlist requests. Reloading."
-      : "Reset Twitch playlist client profile. Reloading.");
-    window.setTimeout(() => location.reload(), 500);
-  }
-
-  async function redirectCurrentCdn() {
-    const diagnostics = getDiagnostics();
-    const fromHost = diagnostics.cdn.dominant?.host || parseCdnHost(getVideoRecentRequests()[0]?.url);
-    const toHost = getBestRedirectTarget(fromHost);
-
-    if (!fromHost) {
-      addLog("No current video CDN detected yet. Let the stream run for a few segment requests.");
-      render();
-      return;
-    }
-
-    if (!toHost) {
-      addLog(`No alternate video CDN has been observed yet. Wait until the CDN table shows a second video host, then try Redirect CDN.`);
-      render();
-      return;
-    }
-
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_SET_CDN_REDIRECT",
-      fromHost,
-      toHost
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not create CDN redirect: ${response?.error || "unknown error"}`);
-      render();
-      return;
-    }
-
-    state.pendingSwitch = {
-      old: summarizeHostStats(fromHost),
-      oldEdge: getCdnEdgeDetails(fromHost),
-      startedAt: Date.now(),
-      url: location.href
-    };
-    state.network.cdnRedirect = response.redirect;
-    saveSwitchState();
-    addLog(`Redirecting ${fromHost} to ${toHost}. Reloading Twitch to test token portability.`);
-    clearSessionDiagnostics("Testing transparent CDN redirect.", {
-      preserveSwitchTracking: true
-    });
-    window.setTimeout(() => location.reload(), 500);
-  }
-
-  async function clearCdnRedirect() {
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_CLEAR_CDN_REDIRECT"
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not clear CDN redirect: ${response?.error || "unknown error"}`);
-      return;
-    }
-
-    state.network.cdnRedirect = null;
-    addLog("Cleared active CDN redirect.");
-  }
-
-  async function rewritePlaylistCdn() {
-    const diagnostics = getDiagnostics();
-    const fromHost = diagnostics.cdn.dominant?.host || parseCdnHost(getVideoRecentRequests()[0]?.url);
-    const toHost = getBestRedirectTarget(fromHost);
-
-    if (!fromHost) {
-      addLog("No current video CDN detected yet. Let the stream run until the CDN table has video segment rows.");
-      render();
-      return;
-    }
-
-    if (!toHost) {
-      addLog("No alternate video CDN observed yet. The playlist rewriter needs a second HLS host to target.");
-      addLog("Try Discover Alternatives after playback has captured a playlist URL.");
-      render();
-      return;
-    }
-
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_SET_PLAYLIST_REWRITE",
-      fromHost,
-      toHost
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not enable playlist rewrite: ${response?.error || "unknown error"}`);
-      render();
-      return;
-    }
-
-    state.pendingSwitch = {
-      old: summarizeHostStats(fromHost),
-      oldEdge: getCdnEdgeDetails(fromHost),
-      startedAt: Date.now(),
-      url: location.href
-    };
-    state.network.playlistRewrite = response.rewrite;
-    saveSwitchState();
-    addLog(`Rewriting playlists from ${fromHost} to ${toHost}. Reloading Twitch.`);
-    clearSessionDiagnostics("Testing Firefox playlist response rewrite.", {
-      preserveSwitchTracking: true
-    });
-    window.setTimeout(() => location.reload(), 500);
-  }
-
-  async function clearPlaylistRewrite() {
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_CLEAR_PLAYLIST_REWRITE"
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not clear playlist rewrite: ${response?.error || "unknown error"}`);
-      return;
-    }
-
-    state.network.playlistRewrite = null;
-    addLog("Cleared active playlist rewrite.");
-  }
-
-  async function setVideoProxy(root) {
-    const proxy = {
-      type: root.querySelector("[data-proxy-type]")?.value || "socks",
-      host: root.querySelector("[data-proxy-host]")?.value || "",
-      port: root.querySelector("[data-proxy-port]")?.value || ""
-    };
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_SET_VIDEO_PROXY",
-      proxy
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not enable video proxy: ${response?.error || "unknown error"}`);
-      return;
-    }
-
-    state.network.videoProxy = response.proxy;
-    addLog(`Routing Twitch video CDN requests through ${formatVideoProxy(response.proxy)}. Reloading Twitch.`);
-    window.setTimeout(() => location.reload(), 500);
-  }
-
-  async function clearVideoProxy() {
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_CLEAR_VIDEO_PROXY"
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not clear video proxy: ${response?.error || "unknown error"}`);
-      return;
-    }
-
-    state.network.videoProxy = null;
-    addLog("Cleared video proxy routing. Reloading Twitch.");
-    window.setTimeout(() => location.reload(), 500);
-  }
-
-  async function discoverAlternates() {
-    addLog("Sampling captured Twitch playlist URLs for alternate HLS hosts...");
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_SAMPLE_PLAYLIST_ALLOCATOR"
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not sample playlist allocator: ${response?.error || "unknown error"}`);
-      return;
-    }
-
-    state.network.allocatorHosts = response.allocatorHosts || {};
-    const hosts = response.hosts || [];
-    addLog(hosts.length
-      ? `Allocator probe found ${hosts.length} video host(s): ${hosts.join(", ")}`
-      : "Allocator probe completed but did not find any video hosts in playlist responses.");
-  }
-
-  async function avoidSpecificCdn(input) {
-    const host = parseCdnHost(input);
-
-    if (!host) {
-      addLog("No CDN host found. Start playback or paste a Twitch segment URL from the network panel.");
-      render();
-      return;
-    }
-
-    if (!isVideoDeliveryHost(host)) {
-      addLog(`${host} looks like a static asset CDN, not a Twitch video segment CDN. Not blocking it.`);
-      render();
-      return;
-    }
-
-    const edge = getCdnEdgeDetails(input || host);
-    addLog(`Avoiding ${host} for 5 minutes and reloading Twitch.`);
-    state.pendingSwitch = {
-      old: summarizeHostStats(host),
-      oldEdge: edge,
-      startedAt: Date.now(),
-      url: location.href
-    };
-    saveSwitchState();
-
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_AVOID_CDN",
-      host,
-      minutes: 5
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not avoid CDN: ${response?.error || "unknown error"}`);
-      render();
-      return;
-    }
-
-    state.network.avoidedCdns = {
-      ...(state.network.avoidedCdns || {}),
-      [host]: response.rule
-    };
-    render();
-    window.setTimeout(() => location.reload(), 700);
-  }
-
-  async function clearAvoidedCdns() {
-    const response = await sendRuntimeMessage({
-      type: "TWITCH_DIAGNOSTICS_CLEAR_AVOIDED_CDNS"
-    });
-
-    if (!response?.ok) {
-      addLog(`Could not clear CDN avoids: ${response?.error || "unknown error"}`);
-      return;
-    }
-
-    state.network.avoidedCdns = response.avoidedCdns || {};
-    addLog("Cleared avoided CDN rules.");
-  }
-
-  function setText(root, selector, value) {
-    const node = root.querySelector(selector);
-    if (node) node.textContent = value;
-  }
-
-  function renderCdnTable(root, diagnostics) {
-    const table = root.querySelector("[data-cdn-table]");
-    if (!table) return;
-
-    const rows = Object.entries(getVideoCdnHosts())
-      .sort(([, a], [, b]) => (b.count || 0) - (a.count || 0))
-      .slice(0, 8)
-      .map(([host, stats]) => `
-        <tr>
-          <td>${host}</td>
-          <td>${getPrimaryDeliveryType(stats)}</td>
-          <td>${stats.count || 0}</td>
-          <td>${fmtMs(stats.lastMs)}</td>
-          <td>${stats.lastStatus || stats.error || "n/a"}</td>
-        </tr>
-      `)
-      .join("");
-
-    table.innerHTML = rows || `<tr><td colspan="5" class="tdc-muted">Waiting for Twitch media requests...</td></tr>`;
-  }
-
-  function fmtDelta(value) {
-    if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
-    const rounded = Math.round(value);
-    if (rounded === 0) return "0 ms";
-    return `${rounded > 0 ? "+" : ""}${rounded} ms`;
-  }
-
-  function renderSwitchComparison(root, diagnostics) {
-    const summary = root.querySelector("[data-switch-summary]");
-    const table = root.querySelector("[data-switch-table]");
-    if (!summary || !table) return;
-
-    const latest = diagnostics.cdn.switchHistory[0];
-
-    if (!latest && diagnostics.cdn.pendingSwitch) {
-      const old = diagnostics.cdn.pendingSwitch.old;
-      summary.textContent = `Waiting for a new CDN after avoiding ${old.host}. Old CDN avg ${fmtMs(old.avgMs)}, last ${fmtMs(old.lastMs)}, ${old.count} requests, ${old.failures} failures.`;
-      table.innerHTML = `
-        <tr>
-          <td>old: ${old.host}</td>
-          <td>${fmtMs(old.avgMs)}</td>
-          <td>${fmtMs(old.lastMs)}</td>
-          <td>${old.count}</td>
-          <td>${old.failures}</td>
-        </tr>
-        <tr><td colspan="5" class="tdc-muted">Reloading or waiting for Twitch to negotiate another CDN...</td></tr>
-      `;
-      return;
-    }
-
-    if (!latest) {
-      summary.textContent = "Run Avoid CDN + Reload to compare old vs new CDN stats.";
-      table.innerHTML = `<tr><td colspan="5" class="tdc-muted">No switch captured yet.</td></tr>`;
-      return;
-    }
-
-    const avgWord = latest.avgDelta !== null && latest.avgDelta < 0 ? "faster" : "slower";
-    const lastWord = latest.lastDelta !== null && latest.lastDelta < 0 ? "faster" : "slower";
-    summary.textContent = `Switched ${latest.old.host} -> ${latest.new.host}. Avg changed ${fmtDelta(latest.avgDelta)} (${avgWord}); latest response changed ${fmtDelta(latest.lastDelta)} (${lastWord}).`;
-    table.innerHTML = `
-      <tr>
-        <td>old: ${latest.old.host}</td>
-        <td>${fmtMs(latest.old.avgMs)}</td>
-        <td>${fmtMs(latest.old.lastMs)}</td>
-        <td>${latest.old.count}</td>
-        <td>${latest.old.failures}</td>
-      </tr>
-      <tr>
-        <td>new: ${latest.new.host}</td>
-        <td>${fmtMs(latest.new.avgMs)}</td>
-        <td>${fmtMs(latest.new.lastMs)}</td>
-        <td>${latest.new.count}</td>
-        <td>${latest.new.failures}</td>
-      </tr>
-    `;
+    state.metricHistory = state.metricHistory.slice(-90);
   }
 
   function chartPath(samples, key, maxHint = null) {
-    const values = samples
-      .map((sample) => sample[key])
-      .filter((value) => Number.isFinite(value));
-
+    const values = samples.map((sample) => sample[key]).filter(Number.isFinite);
     if (!values.length) return "";
 
     const max = Math.max(maxHint || 0, ...values, 1);
-    const min = 0;
     const width = 220;
     const height = 72;
-    const lastSamples = samples.slice(-60);
+    const last = samples.slice(-60);
 
-    return lastSamples
-      .map((sample, index) => {
-        const raw = Number.isFinite(sample[key]) ? sample[key] : null;
-        const x = lastSamples.length === 1 ? width : (index / (lastSamples.length - 1)) * width;
-        const y = raw === null ? height : height - ((raw - min) / (max - min)) * (height - 8) - 4;
-        return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${Math.max(4, Math.min(height - 4, y)).toFixed(1)}`;
-      })
-      .join(" ");
+    return last.map((sample, index) => {
+      const raw = Number.isFinite(sample[key]) ? sample[key] : null;
+      const x = last.length === 1 ? width : (index / (last.length - 1)) * width;
+      const y = raw === null ? height : height - (raw / max) * (height - 8) - 4;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${Math.max(4, Math.min(height - 4, y)).toFixed(1)}`;
+    }).join(" ");
   }
 
   function renderChart(svg, samples, key, color, maxHint = null) {
     if (!svg) return;
-
     const path = chartPath(samples, key, maxHint);
-    if (!path) {
-      svg.innerHTML = `<text x="110" y="39" text-anchor="middle" class="tdc-chart-empty">waiting</text>`;
-      return;
-    }
-
-    svg.innerHTML = `
-      <line x1="0" y1="68" x2="220" y2="68" class="tdc-chart-axis"></line>
-      <path d="${path}" fill="none" stroke="${color}" stroke-width="2.4" vector-effect="non-scaling-stroke"></path>
-    `;
+    svg.innerHTML = path
+      ? `<line x1="0" y1="68" x2="220" y2="68" class="tdc-chart-axis"></line><path d="${path}" fill="none" stroke="${color}" stroke-width="2.4" vector-effect="non-scaling-stroke"></path>`
+      : `<text x="110" y="39" text-anchor="middle" class="tdc-chart-empty">waiting</text>`;
   }
 
   function formatChartValue(value, unit) {
@@ -1290,20 +436,15 @@
 
   function bindChartHover(svg, readout, key, unit) {
     if (!svg || !readout || svg.dataset.hoverBound === "true") return;
-
     svg.dataset.hoverBound = "true";
     svg.addEventListener("mousemove", (event) => {
       const samples = state.metricHistory.slice(-60);
       if (!samples.length) return;
-
       const rect = svg.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-      const index = Math.round(ratio * (samples.length - 1));
+      const index = Math.round(Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * (samples.length - 1));
       const sample = samples[index];
-      const secondsAgo = Math.round((Date.now() - sample.t) / 1000);
-      readout.textContent = `${formatChartValue(sample[key], unit)} at ${secondsAgo}s ago`;
+      readout.textContent = `${formatChartValue(sample[key], unit)} at ${Math.round((Date.now() - sample.t) / 1000)}s ago`;
     });
-
     svg.addEventListener("mouseleave", () => {
       readout.textContent = "hover for value";
     });
@@ -1316,191 +457,123 @@
 
     graphs.classList.toggle("tdc-hidden-section", !state.graphsVisible);
     toggle.textContent = state.graphsVisible ? "Hide Graphs" : "Show Graphs";
-
     if (!state.graphsVisible) return;
 
-    const bufferChart = root.querySelector("[data-chart-buffer]");
-    const responseChart = root.querySelector("[data-chart-response]");
-    const throughputChart = root.querySelector("[data-chart-throughput]");
-    const dropsChart = root.querySelector("[data-chart-drops]");
-    renderChart(bufferChart, state.metricHistory, "buffer", "#22c55e", 30);
-    renderChart(responseChart, state.metricHistory, "responseMs", "#60a5fa", 1000);
-    renderChart(throughputChart, state.metricHistory, "throughputMbps", "#f59e0b", 8);
-    renderChart(dropsChart, state.metricHistory, "droppedPct", "#ef4444", 10);
-    bindChartHover(bufferChart, root.querySelector("[data-readout-buffer]"), "buffer", "s");
-    bindChartHover(responseChart, root.querySelector("[data-readout-response]"), "responseMs", "ms");
-    bindChartHover(throughputChart, root.querySelector("[data-readout-throughput]"), "throughputMbps", "Mbps");
-    bindChartHover(dropsChart, root.querySelector("[data-readout-drops]"), "droppedPct", "%");
+    const buffer = root.querySelector("[data-chart-buffer]");
+    const response = root.querySelector("[data-chart-response]");
+    const throughput = root.querySelector("[data-chart-throughput]");
+    const drops = root.querySelector("[data-chart-drops]");
+    renderChart(buffer, state.metricHistory, "buffer", "#22c55e", 30);
+    renderChart(response, state.metricHistory, "responseMs", "#60a5fa", 1000);
+    renderChart(throughput, state.metricHistory, "throughputMbps", "#f59e0b", 8);
+    renderChart(drops, state.metricHistory, "droppedPct", "#ef4444", 10);
+    bindChartHover(buffer, root.querySelector("[data-readout-buffer]"), "buffer", "s");
+    bindChartHover(response, root.querySelector("[data-readout-response]"), "responseMs", "ms");
+    bindChartHover(throughput, root.querySelector("[data-readout-throughput]"), "throughputMbps", "Mbps");
+    bindChartHover(drops, root.querySelector("[data-readout-drops]"), "droppedPct", "%");
+  }
+
+  function renderCdnTable(root, diagnostics) {
+    const table = root.querySelector("[data-cdn-table]");
+    if (!table) return;
+
+    const rows = Object.entries(diagnostics.cdn.hosts)
+      .sort(([, a], [, b]) => (b.count || 0) - (a.count || 0))
+      .slice(0, 10)
+      .map(([host, stats]) => `
+        <tr>
+          <td>${host}</td>
+          <td>${getPrimaryDeliveryType(stats)}</td>
+          <td>${stats.count || 0}</td>
+          <td>${fmtMs(stats.lastMs)}</td>
+          <td>${stats.lastStatus || stats.error || "n/a"}</td>
+        </tr>
+      `)
+      .join("");
+
+    table.innerHTML = rows || `<tr><td colspan="5" class="tdc-muted">Waiting for Twitch video CDN requests...</td></tr>`;
+  }
+
+  function setText(root, selector, value) {
+    const node = root.querySelector(selector);
+    if (node) node.textContent = value;
   }
 
   function render() {
-    const root = document.getElementById(SELECTORS.root);
+    const root = document.getElementById(ROOT_ID);
     if (!root) return;
 
-    let diagnostics = getDiagnostics();
-    if (updateSwitchTracking(diagnostics)) {
-      diagnostics = getDiagnostics();
-    }
+    const diagnostics = getDiagnostics();
     addMetricSample(diagnostics);
-    const cdnHost = diagnostics.cdn.dominant?.host || "n/a";
-    const playbackState = diagnostics.playback.foundVideo
-      ? `${diagnostics.playback.paused ? "paused" : "playing"} / ready ${diagnostics.playback.readyState}`
-      : "no video";
 
     root.classList.toggle("tdc-hidden", !state.visible);
     root.classList.toggle("tdc-compact", state.compact);
-
-    const status = root.querySelector("[data-status]");
-    status.className = `tdc-status ${statusClass(diagnostics)}`;
+    root.querySelector("[data-status]").className = `tdc-status ${statusClass(diagnostics)}`;
 
     setText(root, "[data-buffer]", fmtSeconds(diagnostics.playback.bufferAhead));
     setText(root, "[data-responsiveness]", diagnostics.cdn.responsiveness);
-    setText(root, "[data-cdn]", cdnHost);
-    setText(root, "[data-cdn-edge]", formatEdgeDetails(diagnostics.cdn.edge));
-    setText(root, "[data-video-proxy]", formatVideoProxy(diagnostics.cdn.videoProxy));
-    setText(root, "[data-playlist-rewrite]", formatPlaylistRewrite(diagnostics.cdn.playlistRewrite));
-    setText(root, "[data-allocator-hosts]", formatAllocatorHosts(state.network.allocatorHosts));
-    setText(root, "[data-latency]", fmtSeconds(diagnostics.playback.liveLatency));
+    setText(root, "[data-cdn]", diagnostics.cdn.dominant?.host || "n/a");
+    setText(root, "[data-latency]", fmtSeconds(diagnostics.playback.liveEdgeGap));
     setText(root, "[data-drops]", diagnostics.playback.totalVideoFrames ? `${diagnostics.playback.droppedVideoFrames} / ${diagnostics.playback.droppedFramePercent}%` : "n/a");
     setText(root, "[data-throughput]", fmtBitrate(diagnostics.performance.estimatedRecentThroughput));
-    setText(root, "[data-playback]", playbackState);
+    setText(root, "[data-playback]", diagnostics.playback.foundVideo ? `${diagnostics.playback.paused ? "paused" : "playing"} / ready ${diagnostics.playback.readyState}` : "no video");
     setText(root, "[data-log]", state.logs.join("\n"));
     renderCdnTable(root, diagnostics);
-    renderSwitchComparison(root, diagnostics);
     renderGraphs(root);
-  }
-
-  function togglePanel() {
-    state.visible = !state.visible;
-    render();
-  }
-
-  function formatAvoidedCdns(avoidedCdns) {
-    const entries = Object.values(avoidedCdns || {});
-    if (!entries.length) return "none";
-
-    return entries
-      .map((entry) => {
-        const remainingMs = Math.max(0, entry.expiresAt - Date.now());
-        const remainingMin = Math.ceil(remainingMs / 60000);
-        return `${entry.host} (${remainingMin}m)`;
-      })
-      .join(", ");
-  }
-
-  function formatCdnRedirect(redirect) {
-    if (!redirect?.fromHost || !redirect?.toHost) return "none";
-    return `${redirect.fromHost} -> ${redirect.toHost}`;
-  }
-
-  function formatPlaylistRewrite(rewrite) {
-    if (!rewrite?.fromHost || !rewrite?.toHost) return "none";
-    const count = rewrite.rewrittenUrls || 0;
-    return `${rewrite.fromHost} -> ${rewrite.toHost} (${count} urls rewritten)`;
-  }
-
-  function formatVideoProxy(proxy) {
-    if (!proxy?.host || !proxy?.port) return "none";
-    return `${proxy.type || "socks"}://${proxy.host}:${proxy.port}`;
-  }
-
-  function formatAllocatorHosts(hosts) {
-    const entries = Object.values(hosts || {});
-    if (!entries.length) return "none";
-
-    return entries
-      .sort((a, b) => (b.count || 0) - (a.count || 0))
-      .map((entry) => `${entry.host} (${entry.count})`)
-      .join(", ");
-  }
-
-  function formatEdgeDetails(edge) {
-    if (!edge?.host || edge.host === "n/a") return "n/a";
-    return `${edge.provider} / ${edge.role} / edge ${edge.edgeId} / region ${edge.region}`;
   }
 
   function connectBackground() {
     try {
       if (globalThis.browser?.runtime?.sendMessage) {
-        api.runtime.sendMessage({ type: "TWITCH_DIAGNOSTICS_GET_NETWORK" })
-          .then((response) => {
-      if (response) {
-        state.network = {
-          ...response,
-          avoidedCdns: response.avoidedCdns || {},
-          cdnRedirect: response.cdnRedirect || null,
-          allocatorHosts: response.allocatorHosts || {},
-          playlistUrls: response.playlistUrls || [],
-          videoProxy: response.videoProxy || null,
-          playlistRewrite: response.playlistRewrite || null
-        };
-        render();
-      }
-          })
-          .catch(() => {});
+        api.runtime.sendMessage({ type: "TWITCH_DIAGNOSTICS_GET_NETWORK" }).then((response) => {
+          if (response) {
+            state.network = response;
+            render();
+          }
+        }).catch(() => {});
       } else {
         api.runtime.sendMessage({ type: "TWITCH_DIAGNOSTICS_GET_NETWORK" }, (response) => {
-            if (response) {
-              state.network = {
-                ...response,
-                avoidedCdns: response.avoidedCdns || {},
-                cdnRedirect: response.cdnRedirect || null,
-                allocatorHosts: response.allocatorHosts || {},
-                playlistUrls: response.playlistUrls || [],
-                videoProxy: response.videoProxy || null,
-                playlistRewrite: response.playlistRewrite || null
-              };
-              render();
-            }
+          if (response) {
+            state.network = response;
+            render();
+          }
         });
       }
     } catch {
-      // The overlay still works from page performance data if background messaging is unavailable.
+      // Page-level performance data still works without background samples.
     }
 
     api.runtime.onMessage.addListener((message) => {
       if (message?.type === "TWITCH_DIAGNOSTICS_TOGGLE_PANEL") {
-        togglePanel();
+        state.visible = !state.visible;
+        render();
       }
 
       if (message?.type === "TWITCH_DIAGNOSTICS_NETWORK_SAMPLE") {
         state.network = {
           ...state.network,
-          ...message.payload,
-          avoidedCdns: state.network.avoidedCdns || {},
-          cdnRedirect: state.network.cdnRedirect || null,
-          allocatorHosts: message.payload.allocatorHosts || state.network.allocatorHosts || {},
-          playlistUrls: message.payload.playlistUrls || state.network.playlistUrls || [],
-          videoProxy: state.network.videoProxy || null,
-          playlistRewrite: state.network.playlistRewrite || null
+          ...message.payload
         };
         render();
       }
     });
   }
 
-  function installStreamChangeWatcher() {
+  function installStreamWatcher() {
     state.streamKey = getStreamKey();
-
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
-
+    const push = history.pushState;
+    const replace = history.replaceState;
     history.pushState = function pushState(...args) {
-      const result = originalPushState.apply(this, args);
+      const result = push.apply(this, args);
       window.setTimeout(detectStreamChange, 0);
       return result;
     };
-
     history.replaceState = function replaceState(...args) {
-      const result = originalReplaceState.apply(this, args);
+      const result = replace.apply(this, args);
       window.setTimeout(detectStreamChange, 0);
       return result;
     };
-
-    window.addEventListener("popstate", () => {
-      window.setTimeout(detectStreamChange, 0);
-    });
-
+    window.addEventListener("popstate", () => window.setTimeout(detectStreamChange, 0));
     window.setInterval(detectStreamChange, 1500);
   }
 
@@ -1512,9 +585,8 @@
     }
   });
 
-  loadSwitchState();
   createPanel();
   connectBackground();
-  installStreamChangeWatcher();
+  installStreamWatcher();
   window.setInterval(render, 1000);
 })();

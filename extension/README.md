@@ -1,23 +1,21 @@
 # Twitch Diagnostics Console
 
-Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox. It injects a draggable diagnostics console into Twitch pages and captures playback/network signals useful for troubleshooting stream issues.
+Twitch Diagnostics Console is a browser add-on for advanced Twitch playback logging and troubleshooting.
+
+It does not attempt to modify Twitch playback, change CDNs, proxy traffic, or bypass Twitch behavior. It observes playback and network signals so users can understand and report buffering or routing problems.
 
 ## Features
 
-- buffer-ahead timer from the active Twitch video element
-- connected CDN host detection from media requests and performance entries
-- CDN request duration, last status, request count, and failure tracking
-- manual CDN probe timing
-- Firefox-only playlist response rewriting that maps a slow observed HLS host to another observed HLS host
-- optional Firefox proxy routing for Twitch video CDN traffic only
-- old-vs-new CDN comparison after forcing a reconnect
-- manual segment URL or CDN host input for exact failover targeting
-- live latency estimate when Twitch exposes seekable live ranges
-- dropped-frame count and dropped-frame percentage
-- recent throughput estimate from browser resource timing
+- buffer-ahead and live-edge gap tracking
+- connected video CDN host detection
+- CDN request count, response time, status, byte count, and delivery type
+- dropped-frame statistics
+- recent throughput estimate
+- rolling graphs with hover readouts
+- event log
 - copy or download a JSON diagnostics report
+- automatic reset when switching Twitch streams
 - toggle with the extension icon or `Alt+Shift+D`
-- optional rolling graphs for buffer, CDN response time, throughput, and dropped frames
 
 ## Install In Chrome Or Edge
 
@@ -36,25 +34,10 @@ Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox
 
 Temporary Firefox add-ons are removed when the browser restarts. For permanent install, package and sign the extension through Mozilla Add-ons.
 
-## Rewriting A Playlist CDN
+## Privacy
 
-Twitch controls CDN selection internally, so the extension cannot directly choose a specific edge server. The strongest browser-only Firefox workaround is playlist rewriting:
-
-1. Let playback run until the console detects the active CDN.
-2. Wait until the CDN table shows a second video delivery host.
-3. Click **Rewrite Playlist CDN**.
-3. The extension snapshots the old CDN's request count, average response time, latest response time, and failures.
-4. Firefox intercepts Twitch `.m3u8` playlist responses and rewrites URLs from the slow host to the alternate observed host.
-5. Twitch reloads and the **CDN Switch Comparison** section shows old-vs-new CDN stats, including average and latest response-time deltas.
-
-Use **Clear Rewrite** to remove the playlist rewrite. This works only in Firefox because it depends on Mozilla's response filtering API. It may still fail if Twitch's segment tokens are bound to the original host.
-
-## Routing Video CDN Traffic
-
-If Twitch only provides one HLS host, the next practical lever is network path. Enter a SOCKS or HTTP proxy host and port, then click **Use Video Proxy**. The extension routes Twitch video CDN requests through that proxy while leaving the rest of Twitch direct. Use **Clear Proxy** to return to normal routing.
-
-This requires a working proxy endpoint, for example a SOCKS proxy from a VPN, SSH tunnel, or remote machine.
+The add-on stores diagnostics locally in memory while the Twitch tab is open. It does not send diagnostics anywhere. JSON exports are created only when the user clicks copy or download.
 
 ## Notes
 
-Browser timing APIs and Twitch internals vary by browser, stream type, and privacy settings. The console reports the strongest available signals, but some fields may show `n/a` until playback starts or until media segment requests are observed.
+Browser timing APIs and Twitch internals vary by browser, stream type, and privacy settings. Some fields may show `n/a` until playback starts or until media segment requests are observed.
