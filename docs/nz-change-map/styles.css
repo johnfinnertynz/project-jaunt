@@ -299,6 +299,62 @@ input[type="range"] {
   gap: 12px;
 }
 
+.radio-console {
+  display: grid;
+  gap: 12px;
+}
+
+#radio-map {
+  min-height: 300px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #111827;
+}
+
+.radio-player,
+.radio-source {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.09);
+}
+
+.radio-player span,
+.radio-source span {
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.radio-player h3 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.radio-player p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.radio-player audio {
+  width: 100%;
+}
+
+.radio-source {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.radio-source a {
+  color: var(--accent);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 .info-card,
 .radio-card {
   display: grid;
@@ -308,6 +364,18 @@ input[type="range"] {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
+}
+
+.radio-card {
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.radio-card[aria-selected="true"] {
+  border-color: rgba(56, 189, 248, 0.9);
+  background: rgba(56, 189, 248, 0.16);
 }
 
 .info-card span,
@@ -334,10 +402,6 @@ input[type="range"] {
 .info-card a {
   color: var(--accent);
   font-weight: 800;
-}
-
-.radio-card audio {
-  width: 100%;
 }
 
 .leaflet-popup-content-wrapper,
@@ -422,7 +486,8 @@ input[type="range"] {
   }
 
   .info-grid,
-  .radio-grid {
+  .radio-grid,
+  .radio-source {
     grid-template-columns: 1fr;
   }
 }

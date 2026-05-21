@@ -113,45 +113,53 @@
       <section class="info-section" aria-labelledby="radio-title">
         <div class="section-heading">
           <p class="eyebrow">Radio</p>
-          <h2 id="radio-title">Live public radio streams</h2>
+          <h2 id="radio-title">Broadcast locations and live streams</h2>
           <p>
-            A starter radio panel for broadcast context. These use RNZ's published live stream URLs;
-            transmitter-level mapping can be added later from RSM licence records.
+            Click a station to jump to its broadcast context and play the published live stream.
+            RNZ National and Concert use transmitter networks across New Zealand; RNZ Pacific
+            includes a shortwave transmission site at Rangitaiki, east of Taupo.
           </p>
         </div>
-        <div class="radio-grid">
-          <article class="radio-card">
-            <div>
+        <div class="radio-console">
+          <div id="radio-map" aria-label="Radio station broadcast context map"></div>
+          <div class="radio-player" aria-live="polite">
+            <span id="radio-kicker">Selected station</span>
+            <h3 id="radio-player-title">RNZ National</h3>
+            <p id="radio-player-meta">Nationwide AM/FM network. Studio and newsroom base: Wellington.</p>
+            <audio id="radio-player" controls preload="none" src="https://stream-ice.radionz.co.nz/national.mp3"></audio>
+          </div>
+          <div class="radio-grid">
+            <button class="radio-card" type="button" data-station="rnz-national">
               <span>Public radio</span>
               <h3>RNZ National</h3>
-              <p>Network: nationwide. Stream: RNZ published MP3 live feed.</p>
-            </div>
-            <audio controls preload="none" src="https://stream-ice.radionz.co.nz/national.mp3"></audio>
-          </article>
-          <article class="radio-card">
-            <div>
+              <p>Broadcasts nationally on AM/FM, with major city frequencies including Auckland, Wellington, Christchurch, and Dunedin.</p>
+            </button>
+            <button class="radio-card" type="button" data-station="rnz-concert">
               <span>Classical and arts</span>
               <h3>RNZ Concert</h3>
-              <p>Network: nationwide. Stream: RNZ published MP3 live feed.</p>
-            </div>
-            <audio controls preload="none" src="https://stream-ice.radionz.co.nz/concert.mp3"></audio>
-          </article>
-          <article class="radio-card">
-            <div>
+              <p>FM network for classical, jazz, arts, and specialist music programming across many NZ centres.</p>
+            </button>
+            <button class="radio-card" type="button" data-station="rnz-pacific">
               <span>Pacific service</span>
               <h3>RNZ International</h3>
-              <p>Broadcast focus: Pacific region. Stream: RNZ published MP3 live feed.</p>
-            </div>
-            <audio controls preload="none" src="https://stream-ice.radionz.co.nz/international.mp3"></audio>
-          </article>
-          <article class="radio-card">
-            <div>
+              <p>Shortwave service from Rangitaiki, about 41 km east of Taupo, aimed across the Pacific.</p>
+            </button>
+            <button class="radio-card" type="button" data-station="rnz-parliament">
               <span>Parliament</span>
               <h3>RNZ Parliament</h3>
-              <p>Broadcast focus: parliamentary audio when available. Stream: RNZ published MP3 live feed.</p>
+              <p>AM Network carrying Parliament when the House is sitting, with transmission points around NZ.</p>
+            </button>
+          </div>
+          <div class="radio-source">
+            <div>
+              <span>Source pathway</span>
+              <a href="https://www.rnz.co.nz/listen" target="_blank" rel="noreferrer">RNZ frequencies and live stream URLs</a>
             </div>
-            <audio controls preload="none" src="https://stream-ice.radionz.co.nz/parliament.mp3"></audio>
-          </article>
+            <div>
+              <span>Technical source</span>
+              <a href="https://www.rnz.co.nz/international/technical" target="_blank" rel="noreferrer">RNZ Pacific transmission site note</a>
+            </div>
+          </div>
         </div>
       </section>
     </main>

@@ -23,6 +23,44 @@ const tabs = document.getElementById("dataset-tabs");
 const yearSlider = document.getElementById("year-slider");
 const inflationToggle = document.getElementById("inflation-toggle");
 const inflationControl = document.getElementById("inflation-control");
+const radioPlayer = document.getElementById("radio-player");
+const radioPlayerTitle = document.getElementById("radio-player-title");
+const radioPlayerMeta = document.getElementById("radio-player-meta");
+
+const RADIO_STATIONS = {
+  "rnz-national": {
+    name: "RNZ National",
+    stream: "https://stream-ice.radionz.co.nz/national.mp3",
+    coords: [-41.2865, 174.7762],
+    zoom: 5,
+    marker: "Wellington studio and nationwide AM/FM network",
+    meta: "Nationwide AM/FM network. Studio and newsroom base: Wellington. Published stream: RNZ National MP3."
+  },
+  "rnz-concert": {
+    name: "RNZ Concert",
+    stream: "https://stream-ice.radionz.co.nz/concert.mp3",
+    coords: [-41.2865, 174.7762],
+    zoom: 5,
+    marker: "Wellington base and nationwide FM network",
+    meta: "Nationwide FM network for classical, jazz, arts, and specialist music. Published stream: RNZ Concert MP3."
+  },
+  "rnz-pacific": {
+    name: "RNZ International",
+    stream: "https://stream-ice.radionz.co.nz/international.mp3",
+    coords: [-38.886, 176.353],
+    zoom: 8,
+    marker: "Rangitaiki shortwave transmission area",
+    meta: "Pacific shortwave service. RNZ describes its transmission site as Rangitaiki, 41 km east of Taupo."
+  },
+  "rnz-parliament": {
+    name: "RNZ Parliament",
+    stream: "https://stream-ice.radionz.co.nz/parliament.mp3",
+    coords: [-41.2784, 174.7767],
+    zoom: 6,
+    marker: "Parliament audio source and AM Network distribution",
+    meta: "Parliament audio when the House is sitting, carried through RNZ's AM Network and online stream."
+  }
+};
 
 const DATASET_EXPLAINERS = {
   affordability: "Higher values mean the region's typical housing or land price is taking a larger multiple of income. With inflation adjustment on, older values are expressed in 2025 terms so the time comparison is fairer.",
@@ -231,6 +269,59 @@ function render() {
   inflationToggle.checked = state.inflationAdjusted;
 }
 
+function setupRadio() {
+  const radioMapElement = document.getElementById("radio-map");
+  if (!radioMapElement) return;
+
+  const radioMap = L.map("radio-map", {
+    zoomControl: true,
+    attributionControl: false,
+    scrollWheelZoom: false
+  }).setView([-40.7, 173.4], 5);
+
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 18
+  }).addTo(radioMap);
+
+  const markers = {};
+  for (const [id, station] of Object.entries(RADIO_STATIONS)) {
+    markers[id] = L.circleMarker(station.coords, {
+      radius: 8,
+      color: "#ffffff",
+      fillColor: "#38bdf8",
+      fillOpacity: 0.9,
+      weight: 2
+    })
+      .bindPopup(`<strong>${escapeHtml(station.name)}</strong><br>${escapeHtml(station.marker)}`)
+      .addTo(radioMap);
+  }
+
+  const selectStation = (stationId, shouldPlay = true) => {
+    const station = RADIO_STATIONS[stationId];
+    if (!station) return;
+    document.querySelectorAll(".radio-card").forEach((card) => {
+      card.setAttribute("aria-selected", String(card.dataset.station === stationId));
+    });
+    radioPlayerTitle.textContent = station.name;
+    radioPlayerMeta.textContent = station.meta;
+    if (radioPlayer.src !== station.stream) {
+      radioPlayer.src = station.stream;
+    }
+    radioMap.setView(station.coords, station.zoom);
+    markers[stationId].openPopup();
+    if (shouldPlay) {
+      radioPlayer.play().catch(() => {
+        radioPlayerMeta.textContent = `${station.meta} Press play to start the stream.`;
+      });
+    }
+  };
+
+  document.querySelectorAll(".radio-card").forEach((card) => {
+    card.addEventListener("click", () => selectStation(card.dataset.station));
+  });
+  selectStation("rnz-national", false);
+}
+
 yearSlider.min = YEARS[0];
 yearSlider.max = YEARS[YEARS.length - 1];
 yearSlider.step = 5;
@@ -251,3 +342,4 @@ inflationToggle.addEventListener("change", () => {
 });
 
 render();
+setupRadio();
