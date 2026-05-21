@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en-NZ">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NZ Change Map | Project Jaunt</title>
+    <meta
+      name="description"
+      content="An interactive satellite time-map prototype for exploring how New Zealand changes over time across housing affordability, population density, fibre rollout, cell towers, workplace patterns, and land cover."
+    >
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://johnfinnertynz.github.io/project-jaunt/nz-change-map/">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="map-stage" aria-label="New Zealand satellite change map">
+        <div id="map"></div>
+        <div class="brand-bar">
+          <a href="../">Project Jaunt</a>
+          <span>NZ Change Map</span>
+        </div>
+        <aside class="inspector" aria-live="polite">
+          <p class="eyebrow">Dataset</p>
+          <h1 id="dataset-title">Land affordability</h1>
+          <p id="dataset-summary"></p>
+          <div class="metric-card">
+            <span id="metric-label">Selected year</span>
+            <strong id="metric-value">2025</strong>
+          </div>
+          <div id="inflation-control" class="toggle-row">
+            <label>
+              <input id="inflation-toggle" type="checkbox" checked>
+              Inflation adjusted
+            </label>
+          </div>
+          <div class="legend">
+            <span class="legend-dot low"></span>
+            <span id="legend-low">Lower</span>
+            <span class="legend-track"></span>
+            <span class="legend-dot high"></span>
+            <span id="legend-high">Higher</span>
+          </div>
+          <div class="source-box">
+            <span>Source pathway</span>
+            <a id="source-link" href="#" target="_blank" rel="noreferrer"></a>
+          </div>
+        </aside>
+      </section>
+
+      <section class="control-deck" aria-label="Timeline and dataset controls">
+        <div class="dataset-tabs" id="dataset-tabs"></div>
+        <div class="timeline-row">
+          <span id="year-min">2000</span>
+          <input id="year-slider" type="range" min="2000" max="2025" step="5" value="2025">
+          <span id="year-max">2025</span>
+        </div>
+      </section>
+
+      <section class="data-notes" aria-labelledby="notes-title">
+        <div>
+          <p class="eyebrow">Build note</p>
+          <h2 id="notes-title">A public-data time machine for Aotearoa</h2>
+        </div>
+        <p>
+          This is a working prototype. The map, controls, and dataset model are real; the displayed
+          regional values are seed data used to prove the interface before automated public-data
+          pipelines are connected. The app is designed to ingest official open sources such as
+          Stats NZ, MHUD, RBNZ, LCDB, RSM, and broadband rollout datasets.
+        </p>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

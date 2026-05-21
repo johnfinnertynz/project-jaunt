@@ -17,6 +17,12 @@ The add-on is designed for diagnostics only. It does not change Twitch playback,
 
 See [extension/README.md](extension/README.md) for install instructions.
 
+## NZ Change Map
+
+The public Pages site includes an interactive satellite-map prototype for exploring changes in New Zealand over time across affordability, population, fibre rollout, mobile infrastructure, work location, farmland, climate pressure, and political position.
+
+Open it at [johnfinnertynz.github.io/project-jaunt/nz-change-map/](https://johnfinnertynz.github.io/project-jaunt/nz-change-map/).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
