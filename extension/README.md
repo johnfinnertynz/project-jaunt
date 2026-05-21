@@ -9,6 +9,7 @@ Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox
 - CDN request duration, last status, request count, and failure tracking
 - manual CDN probe timing
 - Firefox-only playlist response rewriting that maps a slow observed HLS host to another observed HLS host
+- optional Firefox proxy routing for Twitch video CDN traffic only
 - old-vs-new CDN comparison after forcing a reconnect
 - manual segment URL or CDN host input for exact failover targeting
 - live latency estimate when Twitch exposes seekable live ranges
@@ -47,6 +48,12 @@ Twitch controls CDN selection internally, so the extension cannot directly choos
 5. Twitch reloads and the **CDN Switch Comparison** section shows old-vs-new CDN stats, including average and latest response-time deltas.
 
 Use **Clear Rewrite** to remove the playlist rewrite. This works only in Firefox because it depends on Mozilla's response filtering API. It may still fail if Twitch's segment tokens are bound to the original host.
+
+## Routing Video CDN Traffic
+
+If Twitch only provides one HLS host, the next practical lever is network path. Enter a SOCKS or HTTP proxy host and port, then click **Use Video Proxy**. The extension routes Twitch video CDN requests through that proxy while leaving the rest of Twitch direct. Use **Clear Proxy** to return to normal routing.
+
+This requires a working proxy endpoint, for example a SOCKS proxy from a VPN, SSH tunnel, or remote machine.
 
 ## Notes
 

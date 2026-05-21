@@ -10,7 +10,8 @@
       cdnRedirect: null,
       allocatorHosts: {},
       playlistUrls: [],
-      playlistRewrite: null
+      playlistRewrite: null,
+      videoProxy: null
     },
     perfSeen: new Set(),
     perfSamples: [],
@@ -540,6 +541,7 @@
         avoidedCdns: state.network.avoidedCdns || {},
         cdnRedirect: state.network.cdnRedirect || null,
         playlistRewrite: state.network.playlistRewrite || null,
+        videoProxy: state.network.videoProxy || null,
         pendingSwitch: state.pendingSwitch,
         switchHistory: state.switchHistory.slice(0, 10)
       },
@@ -613,6 +615,20 @@
           <button class="tdc-button" type="button" data-export>Download JSON</button>
           <button class="tdc-button" type="button" data-clear>Clear</button>
         </div>
+        <div class="tdc-manual">
+          <select class="tdc-input" data-proxy-type>
+            <option value="socks">SOCKS</option>
+            <option value="http">HTTP</option>
+          </select>
+          <input class="tdc-input" type="text" data-proxy-host placeholder="Proxy host">
+          <input class="tdc-input" type="number" min="1" max="65535" data-proxy-port placeholder="Port">
+          <button class="tdc-button tdc-danger" type="button" data-use-proxy>Use Video Proxy</button>
+          <button class="tdc-button" type="button" data-clear-proxy>Clear Proxy</button>
+        </div>
+        <div class="tdc-card" style="margin-top: 8px;">
+          <div class="tdc-label">Active Video Proxy</div>
+          <div class="tdc-value" data-video-proxy>none</div>
+        </div>
         <div class="tdc-card" style="margin-top: 8px;">
           <div class="tdc-label">Active Playlist Rewrite</div>
           <div class="tdc-value" data-playlist-rewrite>none</div>
@@ -645,18 +661,22 @@
             <div>
               <div class="tdc-chart-title">Buffer ahead</div>
               <svg class="tdc-chart" data-chart-buffer viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
+              <div class="tdc-chart-readout" data-readout-buffer>hover for value</div>
             </div>
             <div>
               <div class="tdc-chart-title">CDN response</div>
               <svg class="tdc-chart" data-chart-response viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
+              <div class="tdc-chart-readout" data-readout-response>hover for value</div>
             </div>
             <div>
               <div class="tdc-chart-title">Throughput</div>
               <svg class="tdc-chart" data-chart-throughput viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
+              <div class="tdc-chart-readout" data-readout-throughput>hover for value</div>
             </div>
             <div>
               <div class="tdc-chart-title">Dropped frames</div>
               <svg class="tdc-chart" data-chart-drops viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
+              <div class="tdc-chart-readout" data-readout-drops>hover for value</div>
             </div>
           </div>
         </div>
@@ -747,6 +767,16 @@
 
     root.querySelector("[data-clear-rewrite]").addEventListener("click", async () => {
       await clearPlaylistRewrite();
+      render();
+    });
+
+    root.querySelector("[data-use-proxy]").addEventListener("click", async () => {
+      await setVideoProxy(root);
+      render();
+    });
+
+    root.querySelector("[data-clear-proxy]").addEventListener("click", async () => {
+      await clearVideoProxy();
       render();
     });
 
@@ -1015,6 +1045,42 @@
     addLog("Cleared active playlist rewrite.");
   }
 
+  async function setVideoProxy(root) {
+    const proxy = {
+      type: root.querySelector("[data-proxy-type]")?.value || "socks",
+      host: root.querySelector("[data-proxy-host]")?.value || "",
+      port: root.querySelector("[data-proxy-port]")?.value || ""
+    };
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_SET_VIDEO_PROXY",
+      proxy
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not enable video proxy: ${response?.error || "unknown error"}`);
+      return;
+    }
+
+    state.network.videoProxy = response.proxy;
+    addLog(`Routing Twitch video CDN requests through ${formatVideoProxy(response.proxy)}. Reloading Twitch.`);
+    window.setTimeout(() => location.reload(), 500);
+  }
+
+  async function clearVideoProxy() {
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_CLEAR_VIDEO_PROXY"
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not clear video proxy: ${response?.error || "unknown error"}`);
+      return;
+    }
+
+    state.network.videoProxy = null;
+    addLog("Cleared video proxy routing. Reloading Twitch.");
+    window.setTimeout(() => location.reload(), 500);
+  }
+
   async function discoverAlternates() {
     addLog("Sampling captured Twitch playlist URLs for alternate HLS hosts...");
     const response = await sendRuntimeMessage({
@@ -1213,6 +1279,36 @@
     `;
   }
 
+  function formatChartValue(value, unit) {
+    if (!Number.isFinite(value)) return "n/a";
+    if (unit === "Mbps") return `${value.toFixed(2)} Mbps`;
+    if (unit === "%") return `${value.toFixed(2)}%`;
+    if (unit === "ms") return `${Math.round(value)} ms`;
+    if (unit === "s") return `${value.toFixed(1)} s`;
+    return `${value}`;
+  }
+
+  function bindChartHover(svg, readout, key, unit) {
+    if (!svg || !readout || svg.dataset.hoverBound === "true") return;
+
+    svg.dataset.hoverBound = "true";
+    svg.addEventListener("mousemove", (event) => {
+      const samples = state.metricHistory.slice(-60);
+      if (!samples.length) return;
+
+      const rect = svg.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      const index = Math.round(ratio * (samples.length - 1));
+      const sample = samples[index];
+      const secondsAgo = Math.round((Date.now() - sample.t) / 1000);
+      readout.textContent = `${formatChartValue(sample[key], unit)} at ${secondsAgo}s ago`;
+    });
+
+    svg.addEventListener("mouseleave", () => {
+      readout.textContent = "hover for value";
+    });
+  }
+
   function renderGraphs(root) {
     const graphs = root.querySelector("[data-graphs]");
     const toggle = root.querySelector("[data-toggle-graphs]");
@@ -1223,10 +1319,18 @@
 
     if (!state.graphsVisible) return;
 
-    renderChart(root.querySelector("[data-chart-buffer]"), state.metricHistory, "buffer", "#22c55e", 30);
-    renderChart(root.querySelector("[data-chart-response]"), state.metricHistory, "responseMs", "#60a5fa", 1000);
-    renderChart(root.querySelector("[data-chart-throughput]"), state.metricHistory, "throughputMbps", "#f59e0b", 8);
-    renderChart(root.querySelector("[data-chart-drops]"), state.metricHistory, "droppedPct", "#ef4444", 10);
+    const bufferChart = root.querySelector("[data-chart-buffer]");
+    const responseChart = root.querySelector("[data-chart-response]");
+    const throughputChart = root.querySelector("[data-chart-throughput]");
+    const dropsChart = root.querySelector("[data-chart-drops]");
+    renderChart(bufferChart, state.metricHistory, "buffer", "#22c55e", 30);
+    renderChart(responseChart, state.metricHistory, "responseMs", "#60a5fa", 1000);
+    renderChart(throughputChart, state.metricHistory, "throughputMbps", "#f59e0b", 8);
+    renderChart(dropsChart, state.metricHistory, "droppedPct", "#ef4444", 10);
+    bindChartHover(bufferChart, root.querySelector("[data-readout-buffer]"), "buffer", "s");
+    bindChartHover(responseChart, root.querySelector("[data-readout-response]"), "responseMs", "ms");
+    bindChartHover(throughputChart, root.querySelector("[data-readout-throughput]"), "throughputMbps", "Mbps");
+    bindChartHover(dropsChart, root.querySelector("[data-readout-drops]"), "droppedPct", "%");
   }
 
   function render() {
@@ -1253,6 +1357,7 @@
     setText(root, "[data-responsiveness]", diagnostics.cdn.responsiveness);
     setText(root, "[data-cdn]", cdnHost);
     setText(root, "[data-cdn-edge]", formatEdgeDetails(diagnostics.cdn.edge));
+    setText(root, "[data-video-proxy]", formatVideoProxy(diagnostics.cdn.videoProxy));
     setText(root, "[data-playlist-rewrite]", formatPlaylistRewrite(diagnostics.cdn.playlistRewrite));
     setText(root, "[data-allocator-hosts]", formatAllocatorHosts(state.network.allocatorHosts));
     setText(root, "[data-latency]", fmtSeconds(diagnostics.playback.liveLatency));
@@ -1294,6 +1399,11 @@
     return `${rewrite.fromHost} -> ${rewrite.toHost} (${count} urls rewritten)`;
   }
 
+  function formatVideoProxy(proxy) {
+    if (!proxy?.host || !proxy?.port) return "none";
+    return `${proxy.type || "socks"}://${proxy.host}:${proxy.port}`;
+  }
+
   function formatAllocatorHosts(hosts) {
     const entries = Object.values(hosts || {});
     if (!entries.length) return "none";
@@ -1321,6 +1431,7 @@
           cdnRedirect: response.cdnRedirect || null,
           allocatorHosts: response.allocatorHosts || {},
           playlistUrls: response.playlistUrls || [],
+          videoProxy: response.videoProxy || null,
           playlistRewrite: response.playlistRewrite || null
         };
         render();
@@ -1336,6 +1447,7 @@
                 cdnRedirect: response.cdnRedirect || null,
                 allocatorHosts: response.allocatorHosts || {},
                 playlistUrls: response.playlistUrls || [],
+                videoProxy: response.videoProxy || null,
                 playlistRewrite: response.playlistRewrite || null
               };
               render();
@@ -1359,6 +1471,7 @@
           cdnRedirect: state.network.cdnRedirect || null,
           allocatorHosts: message.payload.allocatorHosts || state.network.allocatorHosts || {},
           playlistUrls: message.payload.playlistUrls || state.network.playlistUrls || [],
+          videoProxy: state.network.videoProxy || null,
           playlistRewrite: state.network.playlistRewrite || null
         };
         render();

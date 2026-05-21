@@ -238,6 +238,13 @@
   font: 11px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
 
+.tdc-chart-readout {
+  color: #dbe4f0;
+  font-size: 11px;
+  min-height: 16px;
+  margin-top: 4px;
+}
+
 .tdc-compact .tdc-optional {
   display: none;
 }

@@ -9,7 +9,9 @@ const CDN_RULE_STORAGE_KEY = "twitchDiagnosticsAvoidedCdns";
 const CLIENT_PROFILE_STORAGE_KEY = "twitchDiagnosticsClientProfile";
 const CDN_REDIRECT_STORAGE_KEY = "twitchDiagnosticsCdnRedirect";
 const PLAYLIST_REWRITE_STORAGE_KEY = "twitchDiagnosticsPlaylistRewrite";
+const VIDEO_PROXY_STORAGE_KEY = "twitchDiagnosticsVideoProxy";
 let activePlaylistRewrite = null;
+let activeVideoProxy = null;
 
 const CDN_HOST_HINTS = [
   "ttvnw.net",
@@ -278,6 +280,11 @@ async function readPlaylistRewrite() {
   return result?.[PLAYLIST_REWRITE_STORAGE_KEY] || null;
 }
 
+async function readVideoProxy() {
+  const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), VIDEO_PROXY_STORAGE_KEY);
+  return result?.[VIDEO_PROXY_STORAGE_KEY] || null;
+}
+
 async function writeAvoidedCdns(avoidedCdns) {
   await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
     [CDN_RULE_STORAGE_KEY]: avoidedCdns
@@ -294,6 +301,13 @@ async function writePlaylistRewrite(rewrite) {
   activePlaylistRewrite = rewrite;
   await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
     [PLAYLIST_REWRITE_STORAGE_KEY]: rewrite
+  });
+}
+
+async function writeVideoProxy(proxyConfig) {
+  activeVideoProxy = proxyConfig;
+  await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
+    [VIDEO_PROXY_STORAGE_KEY]: proxyConfig
   });
 }
 
@@ -461,6 +475,52 @@ async function setPlaylistRewrite(fromHost, toHost) {
 async function clearPlaylistRewrite() {
   await writePlaylistRewrite(null);
   return null;
+}
+
+async function setVideoProxy(proxyConfig = {}) {
+  const host = String(proxyConfig.host || "").trim();
+  const port = Number.parseInt(proxyConfig.port, 10);
+  const type = proxyConfig.type === "http" ? "http" : "socks";
+
+  if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("Proxy requires a host and port.");
+  }
+
+  const next = {
+    type,
+    host,
+    port,
+    proxyDNS: type === "socks",
+    createdAt: Date.now()
+  };
+
+  await writeVideoProxy(next);
+  return next;
+}
+
+async function clearVideoProxy() {
+  await writeVideoProxy(null);
+  return null;
+}
+
+function getProxyForRequest(requestInfo) {
+  if (!activeVideoProxy) return { type: "direct" };
+
+  let host = "";
+  try {
+    host = new URL(requestInfo.url).hostname.toLowerCase();
+  } catch {
+    return { type: "direct" };
+  }
+
+  if (!isVideoDeliveryHost(host)) return { type: "direct" };
+
+  return {
+    type: activeVideoProxy.type,
+    host: activeVideoProxy.host,
+    port: activeVideoProxy.port,
+    proxyDNS: activeVideoProxy.proxyDNS
+  };
 }
 
 function escapeRegExp(value) {
@@ -728,11 +788,13 @@ async function handleRuntimeMessage(message, sender) {
       const avoidedCdns = await readAvoidedCdns();
       const cdnRedirect = await readCdnRedirect();
       const playlistRewrite = await readPlaylistRewrite();
+      const videoProxy = await readVideoProxy();
       return {
         ...getTabState(sender.tab?.id ?? -1),
         avoidedCdns,
         cdnRedirect,
-        playlistRewrite
+        playlistRewrite,
+        videoProxy
       };
     } catch (error) {
       return {
@@ -740,6 +802,7 @@ async function handleRuntimeMessage(message, sender) {
         avoidedCdns: {},
         cdnRedirect: null,
         playlistRewrite: null,
+        videoProxy: null,
         error: error.message
       };
     }
@@ -818,6 +881,28 @@ async function handleRuntimeMessage(message, sender) {
     }
   }
 
+  if (message?.type === "TWITCH_DIAGNOSTICS_SET_VIDEO_PROXY") {
+    try {
+      return {
+        ok: true,
+        proxy: await setVideoProxy(message.proxy)
+      };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
+  if (message?.type === "TWITCH_DIAGNOSTICS_CLEAR_VIDEO_PROXY") {
+    try {
+      return {
+        ok: true,
+        proxy: await clearVideoProxy()
+      };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
   if (message?.type === "TWITCH_DIAGNOSTICS_SAMPLE_PLAYLIST_ALLOCATOR") {
     return await samplePlaylistAllocator(sender.tab?.id ?? -1);
   }
@@ -850,6 +935,19 @@ clearExpiredAvoidedCdns().catch(() => {});
 readPlaylistRewrite().then((rewrite) => {
   activePlaylistRewrite = rewrite;
 }).catch(() => {});
+readVideoProxy().then((proxyConfig) => {
+  activeVideoProxy = proxyConfig;
+}).catch(() => {});
+
+if (api.proxy?.onRequest) {
+  api.proxy.onRequest.addListener(getProxyForRequest, {
+    urls: [
+      "*://*.ttvnw.net/*",
+      "*://*.twitchcdn.net/*",
+      "*://*.jtvnw.net/*"
+    ]
+  });
+}
 
 api.action.onClicked.addListener((tab) => {
   if (!tab.id) return;
