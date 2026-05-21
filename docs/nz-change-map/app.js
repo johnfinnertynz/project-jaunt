@@ -151,6 +151,32 @@ const RADIO_STATIONS = {
   }
 };
 
+const RADIO_BROWSER_ENDPOINTS = [
+  "https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/NZ?hidebroken=true&order=votes&reverse=true&limit=80",
+  "https://nl1.api.radio-browser.info/json/stations/bycountrycodeexact/NZ?hidebroken=true&order=votes&reverse=true&limit=80",
+  "https://at1.api.radio-browser.info/json/stations/bycountrycodeexact/NZ?hidebroken=true&order=votes&reverse=true&limit=80"
+];
+
+const RADIO_LOCATION_FALLBACKS = {
+  auckland: [-36.8485, 174.7633],
+  wellington: [-41.2865, 174.7762],
+  christchurch: [-43.5321, 172.6362],
+  dunedin: [-45.8788, 170.5028],
+  hamilton: [-37.787, 175.2793],
+  tauranga: [-37.6878, 176.1651],
+  rotorua: [-38.1368, 176.2497],
+  nelson: [-41.2706, 173.284],
+  "palmerston north": [-40.3523, 175.6082],
+  southland: [-46.4132, 168.3538],
+  invercargill: [-46.4132, 168.3538],
+  taranaki: [-39.0556, 174.0752],
+  "kapiti coast": [-40.916, 175.006],
+  waikato: [-37.787, 175.2793],
+  "central plateau": [-39.281, 175.57],
+  "ngati porou": [-37.965, 178.31],
+  "ngāti porou": [-37.965, 178.31]
+};
+
 const DATASET_EXPLAINERS = {
   affordability: "Higher values mean the region's typical housing or land price is taking a larger multiple of income. With inflation adjustment on, older values are expressed in 2025 terms so the time comparison is fairer.",
   population: "This shows how tightly people are distributed across the region's land area. Dense regions usually need stronger transport, housing, water, and social infrastructure planning.",
@@ -400,9 +426,66 @@ function render() {
   inflationToggle.checked = state.inflationAdjusted;
 }
 
+function stationSlug(name) {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 60);
+}
+
+function stationCoords(station) {
+  const lat = Number(station.geo_lat);
+  const lon = Number(station.geo_long);
+  if (Number.isFinite(lat) && Number.isFinite(lon)) return [lat, lon];
+
+  const stateText = String(station.state || station.name || "").toLowerCase();
+  for (const [key, coords] of Object.entries(RADIO_LOCATION_FALLBACKS)) {
+    if (stateText.includes(key)) return coords;
+  }
+  return null;
+}
+
+function usableStation(station) {
+  const stream = station.url_resolved || station.url;
+  if (!stream || !stream.startsWith("https://")) return false;
+  if (!station.name || station.name.length > 70) return false;
+  return Boolean(stationCoords(station));
+}
+
+function normaliseLiveStation(station) {
+  const coords = stationCoords(station);
+  const state = station.state ? `, ${station.state}` : "";
+  return {
+    name: station.name.replace(/\s+/g, " ").trim(),
+    stream: station.url_resolved || station.url,
+    coords,
+    zoom: 7,
+    marker: `Live directory${state}`,
+    meta: `Live station from Radio Browser metadata${state}. Votes: ${station.votes || 0}. Stream URL resolved at page load.`
+  };
+}
+
+async function fetchLiveRadioStations() {
+  for (const endpoint of RADIO_BROWSER_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, { cache: "no-store" });
+      if (!response.ok) continue;
+      return await response.json();
+    } catch {
+      // Try the next public mirror.
+    }
+  }
+  return [];
+}
+
 function setupRadio() {
   const radioMapElement = document.getElementById("radio-map");
   if (!radioMapElement) return;
+  const radioGrid = document.getElementById("radio-grid");
+  const liveStatus = document.getElementById("radio-live-status");
 
   const radioMap = L.map("radio-map", {
     zoomControl: true,
@@ -415,17 +498,6 @@ function setupRadio() {
   }).addTo(radioMap);
 
   const markers = {};
-  for (const [id, station] of Object.entries(RADIO_STATIONS)) {
-    markers[id] = L.circleMarker(station.coords, {
-      radius: 8,
-      color: "#ffffff",
-      fillColor: "#38bdf8",
-      fillOpacity: 0.9,
-      weight: 2
-    })
-      .bindPopup(`<strong>${escapeHtml(station.name)}</strong><br>${escapeHtml(station.marker)}`)
-      .addTo(radioMap);
-  }
 
   const selectStation = (stationId, shouldPlay = true) => {
     const station = RADIO_STATIONS[stationId];
@@ -439,7 +511,7 @@ function setupRadio() {
       radioPlayer.src = station.stream;
     }
     radioMap.setView(station.coords, station.zoom);
-    markers[stationId].openPopup();
+    markers[stationId]?.openPopup();
     if (shouldPlay) {
       radioPlayer.play().catch(() => {
         radioPlayerMeta.textContent = `${station.meta} Press play to start the stream.`;
@@ -447,27 +519,67 @@ function setupRadio() {
     }
   };
 
-  const radioGrid = document.getElementById("radio-grid");
-  if (radioGrid) {
-    radioGrid.replaceChildren();
-    for (const [id, station] of Object.entries(RADIO_STATIONS)) {
-      const card = document.createElement("button");
-      card.className = "radio-card";
-      card.type = "button";
-      card.dataset.station = id;
-      card.innerHTML = `
-        <span>${escapeHtml(station.marker)}</span>
-        <h3>${escapeHtml(station.name)}</h3>
-        <p>${escapeHtml(station.meta)}</p>
-      `;
-      radioGrid.appendChild(card);
-    }
-  }
+  const renderRadioStations = (selectedStation = "rnz-national") => {
+    Object.values(markers).forEach((marker) => marker.remove());
+    Object.keys(markers).forEach((id) => delete markers[id]);
 
-  document.querySelectorAll(".radio-card").forEach((card) => {
-    card.addEventListener("click", () => selectStation(card.dataset.station));
+    for (const [id, station] of Object.entries(RADIO_STATIONS)) {
+      markers[id] = L.circleMarker(station.coords, {
+        radius: station.marker.startsWith("Live") ? 6 : 8,
+        color: "#ffffff",
+        fillColor: station.marker.startsWith("Live") ? "#22c55e" : "#38bdf8",
+        fillOpacity: 0.9,
+        weight: 2
+      })
+        .bindPopup(`<strong>${escapeHtml(station.name)}</strong><br>${escapeHtml(station.marker)}`)
+        .addTo(radioMap);
+    }
+
+    if (radioGrid) {
+      radioGrid.replaceChildren();
+      for (const [id, station] of Object.entries(RADIO_STATIONS)) {
+        const card = document.createElement("button");
+        card.className = "radio-card";
+        card.type = "button";
+        card.dataset.station = id;
+        card.innerHTML = `
+          <span>${escapeHtml(station.marker)}</span>
+          <h3>${escapeHtml(station.name)}</h3>
+          <p>${escapeHtml(station.meta)}</p>
+        `;
+        card.addEventListener("click", () => selectStation(id));
+        radioGrid.appendChild(card);
+      }
+    }
+
+    selectStation(selectedStation, false);
+  };
+
+  renderRadioStations();
+
+  fetchLiveRadioStations().then((stations) => {
+    const existingStreams = new Set(Object.values(RADIO_STATIONS).map((station) => station.stream));
+    let added = 0;
+    for (const station of stations) {
+      if (!usableStation(station)) continue;
+      const liveStation = normaliseLiveStation(station);
+      if (existingStreams.has(liveStation.stream)) continue;
+      const id = `live-${stationSlug(liveStation.name)}`;
+      if (!id || RADIO_STATIONS[id]) continue;
+      RADIO_STATIONS[id] = liveStation;
+      existingStreams.add(liveStation.stream);
+      added += 1;
+      if (added >= 24) break;
+    }
+
+    liveStatus.textContent = added
+      ? `Live parser connected: added ${added} Radio Browser stations.`
+      : "Live parser connected: no additional compatible stations found.";
+    const selected = document.querySelector('.radio-card[aria-selected="true"]')?.dataset.station || "rnz-national";
+    renderRadioStations(selected);
+  }).catch(() => {
+    liveStatus.textContent = "Live parser unavailable, using curated fallback stations.";
   });
-  selectStation("rnz-national", false);
 }
 
 yearSlider.min = YEARS[0];
