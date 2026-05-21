@@ -278,6 +278,13 @@ input[type="range"] {
   white-space: nowrap;
 }
 
+.leaflet-marker-icon.region-label-marker,
+.leaflet-marker-icon.region-label-marker.leaflet-div-icon {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .info-section {
   display: grid;
   grid-template-columns: minmax(260px, 0.58fr) minmax(0, 1fr);

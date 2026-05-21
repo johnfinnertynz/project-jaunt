@@ -225,7 +225,7 @@ function renderRegions() {
     polygon.on("mouseout", () => polygon.setStyle({ fillOpacity: 0.36, weight: 1.35 }));
 
     const labelIcon = L.divIcon({
-      className: "",
+      className: "region-label-marker",
       html: `<div class="region-label">${region.name}<br>${label}</div>`
     });
 
