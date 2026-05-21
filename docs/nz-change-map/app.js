@@ -2,7 +2,8 @@ const state = {
   dataset: "affordability",
   year: 2025,
   inflationAdjusted: true,
-  layers: []
+  layers: [],
+  pointLayers: []
 };
 
 const map = L.map("map", {
@@ -180,6 +181,21 @@ function popupContent(region, label, values) {
   `;
 }
 
+function pointPopupContent(point) {
+  return `
+    <div class="point-popup">
+      <p class="popup-title">${escapeHtml(point.name)}</p>
+      <ul class="popup-list">
+        <li><span>Type</span><strong>${escapeHtml(point.kind)}</strong></li>
+        <li><span>Source mode</span><strong>${escapeHtml(point.status)}</strong></li>
+        <li><span>Pipeline</span><strong>${escapeHtml(point.operator)}</strong></li>
+      </ul>
+      <p class="popup-explainer">${escapeHtml(point.notes)}</p>
+      <p class="popup-status">Cell-site pins are seeded from public-location context. The production layer should replace these with RSM Register of Radio Frequencies licence locations.</p>
+    </div>
+  `;
+}
+
 function renderTabs() {
   tabs.replaceChildren();
   for (const [id, dataset] of Object.entries(DATASETS)) {
@@ -193,6 +209,28 @@ function renderTabs() {
       render();
     });
     tabs.appendChild(button);
+  }
+}
+
+function renderPointFeatures() {
+  for (const layer of state.pointLayers) layer.remove();
+  state.pointLayers = [];
+
+  const points = (typeof POINT_FEATURES === "undefined" ? {} : POINT_FEATURES)[state.dataset] || [];
+  for (const point of points) {
+    const icon = L.divIcon({
+      className: "tower-pin-marker",
+      html: '<span class="tower-pin"></span>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+      popupAnchor: [0, -11]
+    });
+    const marker = L.marker(point.coords, { icon })
+      .bindPopup(pointPopupContent(point), { maxWidth: 340 })
+      .addTo(map);
+
+    marker.on("click", () => marker.openPopup());
+    state.pointLayers.push(marker);
   }
 }
 
@@ -238,6 +276,8 @@ function renderRegions() {
 
     state.layers.push(polygon, textMarker);
   }
+
+  renderPointFeatures();
 }
 
 function renderInspector() {
@@ -252,8 +292,9 @@ function renderInspector() {
   document.getElementById("source-link").textContent = dataset.source;
   document.getElementById("source-link").href = dataset.sourceUrl;
   const pipelineRun = currentPipelineRun();
+  const pointCount = ((typeof POINT_FEATURES === "undefined" ? {} : POINT_FEATURES)[state.dataset] || []).length;
   document.getElementById("pipeline-note").textContent = pipelineRun
-    ? `Local DB pipeline: ${pipelineRun.pipeline} (${pipelineRun.mode}, ${pipelineRun.rowCount} rows). ${pipelineRun.note}`
+    ? `Local DB pipeline: ${pipelineRun.pipeline} (${pipelineRun.mode}, ${pipelineRun.rowCount} rows${pointCount ? `, ${pointCount} pins` : ""}). ${pipelineRun.note}`
     : "Local DB pipeline metadata unavailable.";
   inflationControl.hidden = !dataset.inflationAdjustable;
   document.documentElement.style.setProperty("--good", dataset.invertGood ? "#ef4444" : "#22c55e");

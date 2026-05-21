@@ -302,6 +302,28 @@ input[type="range"] {
   height: 38px;
 }
 
+.leaflet-marker-icon.tower-pin-marker,
+.leaflet-marker-icon.tower-pin-marker.leaflet-div-icon {
+  border: 0;
+  background: transparent;
+}
+
+.tower-pin {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 2px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.24), 0 8px 18px rgba(0, 0, 0, 0.35);
+}
+
+.tower-pin-marker:hover .tower-pin {
+  background: #f59e0b;
+  box-shadow: 0 0 0 7px rgba(245, 158, 11, 0.28), 0 8px 18px rgba(0, 0, 0, 0.42);
+}
+
 .info-section {
   display: grid;
   grid-template-columns: minmax(260px, 0.58fr) minmax(0, 1fr);
@@ -537,17 +559,25 @@ input[type="range"] {
 
 @media (max-width: 980px) {
   .map-stage {
-    min-height: 760px;
+    min-height: auto;
+    padding-top: min(72vh, 620px);
+  }
+
+  #map {
+    height: min(72vh, 620px);
+    bottom: auto;
   }
 
   .inspector {
+    position: relative;
     top: auto;
-    right: 12px;
-    bottom: 150px;
-    left: 12px;
+    right: auto;
+    bottom: auto;
+    left: auto;
     width: auto;
-    max-height: calc(100vh - 250px);
-    overflow: auto;
+    max-height: none;
+    margin: 12px;
+    overflow: visible;
   }
 
   .dataset-tabs {

@@ -25131,6 +25131,250 @@ const NZ_CHANGE_MAP_DATA = {
       }
     }
   },
+  "pointFeatures": {
+    "cellTowers": [
+      {
+        "id": "auckland-cbd",
+        "name": "Auckland CBD mobile site cluster",
+        "coords": [
+          -36.8485,
+          174.7633
+        ],
+        "kind": "High-density urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Central Auckland has dense rooftop and street-level mobile infrastructure."
+      },
+      {
+        "id": "blenheim",
+        "name": "Blenheim mobile site cluster",
+        "coords": [
+          -41.5134,
+          173.9612
+        ],
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Marlborough mobile infrastructure point."
+      },
+      {
+        "id": "christchurch-cbd",
+        "name": "Christchurch CBD mobile site cluster",
+        "coords": [
+          -43.5321,
+          172.6362
+        ],
+        "kind": "High-density urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Christchurch central mobile infrastructure point."
+      },
+      {
+        "id": "dunedin",
+        "name": "Dunedin mobile site cluster",
+        "coords": [
+          -45.8788,
+          170.5028
+        ],
+        "kind": "Urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Dunedin central mobile infrastructure point."
+      },
+      {
+        "id": "gisborne",
+        "name": "Gisborne mobile site cluster",
+        "coords": [
+          -38.6623,
+          178.0176
+        ],
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative East Coast mobile infrastructure point."
+      },
+      {
+        "id": "hamilton",
+        "name": "Hamilton mobile site cluster",
+        "coords": [
+          -37.787,
+          175.2793
+        ],
+        "kind": "Urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Waikato urban mobile infrastructure point."
+      },
+      {
+        "id": "invercargill",
+        "name": "Invercargill mobile site cluster",
+        "coords": [
+          -46.4132,
+          168.3538
+        ],
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Southland mobile infrastructure point."
+      },
+      {
+        "id": "manukau",
+        "name": "Manukau mobile site cluster",
+        "coords": [
+          -36.9928,
+          174.8799
+        ],
+        "kind": "Urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative south Auckland mobile infrastructure point."
+      },
+      {
+        "id": "napier-hastings",
+        "name": "Napier-Hastings mobile site cluster",
+        "coords": [
+          -39.4928,
+          176.912
+        ],
+        "kind": "Twin-city mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Hawke's Bay urban mobile infrastructure point."
+      },
+      {
+        "id": "nelson",
+        "name": "Nelson mobile site cluster",
+        "coords": [
+          -41.2706,
+          173.284
+        ],
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Nelson urban mobile infrastructure point."
+      },
+      {
+        "id": "new-plymouth",
+        "name": "New Plymouth mobile site cluster",
+        "coords": [
+          -39.0556,
+          174.0752
+        ],
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Taranaki mobile infrastructure point."
+      },
+      {
+        "id": "auckland-north-shore",
+        "name": "North Shore mobile site cluster",
+        "coords": [
+          -36.7861,
+          174.7546
+        ],
+        "kind": "Suburban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative North Shore point for later replacement with RSM site records."
+      },
+      {
+        "id": "palmerston-north",
+        "name": "Palmerston North mobile site cluster",
+        "coords": [
+          -40.3523,
+          175.6082
+        ],
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Manawatu mobile infrastructure point."
+      },
+      {
+        "id": "queenstown",
+        "name": "Queenstown mobile site cluster",
+        "coords": [
+          -45.0312,
+          168.6626
+        ],
+        "kind": "Tourism and regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative high-demand tourism mobile infrastructure point."
+      },
+      {
+        "id": "rotorua",
+        "name": "Rotorua mobile site cluster",
+        "coords": [
+          -38.1368,
+          176.2497
+        ],
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative tourism and regional-service mobile site point."
+      },
+      {
+        "id": "tauranga",
+        "name": "Tauranga mobile site cluster",
+        "coords": [
+          -37.6878,
+          176.1651
+        ],
+        "kind": "Urban and port mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Tauranga urban and port-area mobile infrastructure point."
+      },
+      {
+        "id": "timaru",
+        "name": "Timaru mobile site cluster",
+        "coords": [
+          -44.3967,
+          171.2536
+        ],
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative South Canterbury mobile infrastructure point."
+      },
+      {
+        "id": "wellington-cbd",
+        "name": "Wellington CBD mobile site cluster",
+        "coords": [
+          -41.2866,
+          174.7756
+        ],
+        "kind": "High-density urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Wellington central mobile infrastructure point."
+      },
+      {
+        "id": "westport",
+        "name": "Westport mobile site cluster",
+        "coords": [
+          -41.7526,
+          171.6037
+        ],
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative West Coast mobile infrastructure point."
+      },
+      {
+        "id": "whangarei-central",
+        "name": "Whangarei central mobile site cluster",
+        "coords": [
+          -35.7251,
+          174.3237
+        ],
+        "kind": "Urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative central-city mobile site pin. Replace with RSM licence locations in the live point pipeline."
+      }
+    ]
+  },
   "pipelineRuns": [
     {
       "pipeline": "regional_boundaries",
@@ -25138,7 +25382,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "source",
       "note": "Loaded Stats NZ regional council boundaries and simplified them for browser rendering.",
       "rowCount": 16,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     },
     {
       "pipeline": "housing_affordability",
@@ -25146,7 +25390,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: join MHUD local housing statistics with income data and Stats NZ CPI.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     },
     {
       "pipeline": "stats_nz_population",
@@ -25154,7 +25398,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: Stats NZ API population estimates by region and census years.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     },
     {
       "pipeline": "broadband_rollout",
@@ -25162,7 +25406,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: Crown Infrastructure Partners broadband rollout tables by coverage area.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     },
     {
       "pipeline": "rsm_cell_sites",
@@ -25170,7 +25414,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: RSM licence/site records aggregated to regions.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     },
     {
       "pipeline": "stats_nz_workplace",
@@ -25178,7 +25422,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: census workplace address and commuting flow tables.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     },
     {
       "pipeline": "land_cover_database",
@@ -25186,7 +25430,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: LCDB versions grouped into productive land-cover classes.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     },
     {
       "pipeline": "forestry_cover",
@@ -25194,7 +25438,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: combine MPI National Exotic Forest Description regional tables with LCDB forest classes over time.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     },
     {
       "pipeline": "climate_pressure",
@@ -25202,7 +25446,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: MfE, NIWA, and council hazard layers composited by region.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     },
     {
       "pipeline": "electoral_commission_results",
@@ -25210,7 +25454,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: Electoral Commission party vote by electorate mapped to regions.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:07:12"
+      "createdAt": "2026-05-21 13:24:10"
     }
   ]
 };
@@ -25218,4 +25462,5 @@ const NZ_CHANGE_MAP_DATA = {
 const YEARS = NZ_CHANGE_MAP_DATA.years;
 const REGIONS = NZ_CHANGE_MAP_DATA.regions;
 const DATASETS = NZ_CHANGE_MAP_DATA.datasets;
+const POINT_FEATURES = NZ_CHANGE_MAP_DATA.pointFeatures;
 const PIPELINE_RUNS = NZ_CHANGE_MAP_DATA.pipelineRuns;

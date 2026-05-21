@@ -321,6 +321,230 @@ DATASET_SOURCES = {
 }
 
 
+CELL_TOWER_POINTS = [
+    {
+        "id": "whangarei-central",
+        "dataset_id": "cellTowers",
+        "name": "Whangarei central mobile site cluster",
+        "lat": -35.7251,
+        "lon": 174.3237,
+        "kind": "Urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative central-city mobile site pin. Replace with RSM licence locations in the live point pipeline.",
+    },
+    {
+        "id": "auckland-cbd",
+        "dataset_id": "cellTowers",
+        "name": "Auckland CBD mobile site cluster",
+        "lat": -36.8485,
+        "lon": 174.7633,
+        "kind": "High-density urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Central Auckland has dense rooftop and street-level mobile infrastructure.",
+    },
+    {
+        "id": "auckland-north-shore",
+        "dataset_id": "cellTowers",
+        "name": "North Shore mobile site cluster",
+        "lat": -36.7861,
+        "lon": 174.7546,
+        "kind": "Suburban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative North Shore point for later replacement with RSM site records.",
+    },
+    {
+        "id": "manukau",
+        "dataset_id": "cellTowers",
+        "name": "Manukau mobile site cluster",
+        "lat": -36.9928,
+        "lon": 174.8799,
+        "kind": "Urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative south Auckland mobile infrastructure point.",
+    },
+    {
+        "id": "hamilton",
+        "dataset_id": "cellTowers",
+        "name": "Hamilton mobile site cluster",
+        "lat": -37.7870,
+        "lon": 175.2793,
+        "kind": "Urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Waikato urban mobile infrastructure point.",
+    },
+    {
+        "id": "tauranga",
+        "dataset_id": "cellTowers",
+        "name": "Tauranga mobile site cluster",
+        "lat": -37.6878,
+        "lon": 176.1651,
+        "kind": "Urban and port mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Tauranga urban and port-area mobile infrastructure point.",
+    },
+    {
+        "id": "rotorua",
+        "dataset_id": "cellTowers",
+        "name": "Rotorua mobile site cluster",
+        "lat": -38.1368,
+        "lon": 176.2497,
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative tourism and regional-service mobile site point.",
+    },
+    {
+        "id": "gisborne",
+        "dataset_id": "cellTowers",
+        "name": "Gisborne mobile site cluster",
+        "lat": -38.6623,
+        "lon": 178.0176,
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative East Coast mobile infrastructure point.",
+    },
+    {
+        "id": "napier-hastings",
+        "dataset_id": "cellTowers",
+        "name": "Napier-Hastings mobile site cluster",
+        "lat": -39.4928,
+        "lon": 176.9120,
+        "kind": "Twin-city mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Hawke's Bay urban mobile infrastructure point.",
+    },
+    {
+        "id": "new-plymouth",
+        "dataset_id": "cellTowers",
+        "name": "New Plymouth mobile site cluster",
+        "lat": -39.0556,
+        "lon": 174.0752,
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Taranaki mobile infrastructure point.",
+    },
+    {
+        "id": "palmerston-north",
+        "dataset_id": "cellTowers",
+        "name": "Palmerston North mobile site cluster",
+        "lat": -40.3523,
+        "lon": 175.6082,
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Manawatu mobile infrastructure point.",
+    },
+    {
+        "id": "wellington-cbd",
+        "dataset_id": "cellTowers",
+        "name": "Wellington CBD mobile site cluster",
+        "lat": -41.2866,
+        "lon": 174.7756,
+        "kind": "High-density urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Wellington central mobile infrastructure point.",
+    },
+    {
+        "id": "nelson",
+        "dataset_id": "cellTowers",
+        "name": "Nelson mobile site cluster",
+        "lat": -41.2706,
+        "lon": 173.2840,
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Nelson urban mobile infrastructure point.",
+    },
+    {
+        "id": "blenheim",
+        "dataset_id": "cellTowers",
+        "name": "Blenheim mobile site cluster",
+        "lat": -41.5134,
+        "lon": 173.9612,
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Marlborough mobile infrastructure point.",
+    },
+    {
+        "id": "christchurch-cbd",
+        "dataset_id": "cellTowers",
+        "name": "Christchurch CBD mobile site cluster",
+        "lat": -43.5321,
+        "lon": 172.6362,
+        "kind": "High-density urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Christchurch central mobile infrastructure point.",
+    },
+    {
+        "id": "timaru",
+        "dataset_id": "cellTowers",
+        "name": "Timaru mobile site cluster",
+        "lat": -44.3967,
+        "lon": 171.2536,
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative South Canterbury mobile infrastructure point.",
+    },
+    {
+        "id": "queenstown",
+        "dataset_id": "cellTowers",
+        "name": "Queenstown mobile site cluster",
+        "lat": -45.0312,
+        "lon": 168.6626,
+        "kind": "Tourism and regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative high-demand tourism mobile infrastructure point.",
+    },
+    {
+        "id": "dunedin",
+        "dataset_id": "cellTowers",
+        "name": "Dunedin mobile site cluster",
+        "lat": -45.8788,
+        "lon": 170.5028,
+        "kind": "Urban mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Dunedin central mobile infrastructure point.",
+    },
+    {
+        "id": "invercargill",
+        "dataset_id": "cellTowers",
+        "name": "Invercargill mobile site cluster",
+        "lat": -46.4132,
+        "lon": 168.3538,
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative Southland mobile infrastructure point.",
+    },
+    {
+        "id": "westport",
+        "dataset_id": "cellTowers",
+        "name": "Westport mobile site cluster",
+        "lat": -41.7526,
+        "lon": 171.6037,
+        "kind": "Regional mobile infrastructure",
+        "operator": "RSM public-register target",
+        "status": "Seed point",
+        "notes": "Representative West Coast mobile infrastructure point.",
+    },
+]
+
+
 SEED_SERIES = {
     "affordability": {
         "northland": [3.1, 3.5, 4.7, 6.0, 7.2, 6.4],
@@ -693,6 +917,7 @@ def reset_schema(conn: sqlite3.Connection) -> None:
         """
         DROP TABLE IF EXISTS observations;
         DROP TABLE IF EXISTS pipeline_runs;
+        DROP TABLE IF EXISTS point_features;
         DROP TABLE IF EXISTS dataset_sources;
         DROP TABLE IF EXISTS sources;
         DROP TABLE IF EXISTS datasets;
@@ -750,6 +975,18 @@ def reset_schema(conn: sqlite3.Connection) -> None:
           note TEXT NOT NULL,
           row_count INTEGER NOT NULL,
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE point_features (
+          id TEXT PRIMARY KEY,
+          dataset_id TEXT NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          lat REAL NOT NULL,
+          lon REAL NOT NULL,
+          kind TEXT NOT NULL,
+          operator TEXT NOT NULL,
+          status TEXT NOT NULL,
+          notes TEXT NOT NULL
         );
 
         CREATE TABLE observations (
@@ -824,6 +1061,13 @@ def insert_reference_data(conn: sqlite3.Connection, regions: list[dict[str, Any]
             for dataset_id, source_ids in DATASET_SOURCES.items()
             for source_id in source_ids
         ],
+    )
+    conn.executemany(
+        """
+        INSERT INTO point_features (id, dataset_id, name, lat, lon, kind, operator, status, notes)
+        VALUES (:id, :dataset_id, :name, :lat, :lon, :kind, :operator, :status, :notes)
+        """,
+        CELL_TOWER_POINTS,
     )
 
 
@@ -943,6 +1187,20 @@ def export_frontend_data(db_path: Path, export_path: Path) -> None:
             }
             for row in fetch_rows(conn, "SELECT * FROM pipeline_runs ORDER BY id")
         ]
+
+        point_features: dict[str, list[dict[str, Any]]] = {}
+        for row in fetch_rows(conn, "SELECT * FROM point_features ORDER BY dataset_id, name"):
+            point_features.setdefault(row["dataset_id"], []).append(
+                {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "coords": [row["lat"], row["lon"]],
+                    "kind": row["kind"],
+                    "operator": row["operator"],
+                    "status": row["status"],
+                    "notes": row["notes"],
+                }
+            )
     finally:
         conn.close()
 
@@ -950,6 +1208,7 @@ def export_frontend_data(db_path: Path, export_path: Path) -> None:
         "years": years,
         "regions": regions,
         "datasets": datasets,
+        "pointFeatures": point_features,
         "pipelineRuns": runs,
     }
     export_path.parent.mkdir(parents=True, exist_ok=True)
@@ -960,6 +1219,7 @@ def export_frontend_data(db_path: Path, export_path: Path) -> None:
         + "const YEARS = NZ_CHANGE_MAP_DATA.years;\n"
         + "const REGIONS = NZ_CHANGE_MAP_DATA.regions;\n"
         + "const DATASETS = NZ_CHANGE_MAP_DATA.datasets;\n"
+        + "const POINT_FEATURES = NZ_CHANGE_MAP_DATA.pointFeatures;\n"
         + "const PIPELINE_RUNS = NZ_CHANGE_MAP_DATA.pipelineRuns;\n",
         encoding="utf-8",
     )
