@@ -48,6 +48,58 @@
     }
   }
 
+  function parseCdnHost(input) {
+    const value = String(input || "").trim();
+    if (!value) return "";
+
+    if (/^https?:\/\//i.test(value)) {
+      return safeUrlHost(value).toLowerCase();
+    }
+
+    const withoutMethod = value.replace(/^(GET|POST|HEAD|OPTIONS)\s+/i, "").trim();
+    if (/^https?:\/\//i.test(withoutMethod)) {
+      return safeUrlHost(withoutMethod).toLowerCase();
+    }
+
+    const firstToken = withoutMethod.split(/\s+/)[0].replace(/^\/\//, "");
+    return firstToken.split("/")[0].split("?")[0].toLowerCase();
+  }
+
+  function getCdnEdgeDetails(urlOrHost) {
+    const input = String(urlOrHost || "");
+    const host = parseCdnHost(input);
+    const labels = host.split(".");
+    const isStaticAssetCdn = host === "static-cdn.jtvnw.net" || host.startsWith("static-cdn.");
+    const provider = host.includes("cloudfront") ? "CloudFront" :
+      host.includes("fastly") ? "Fastly" :
+      host.includes("akamaized") ? "Akamai" :
+      host.includes("ttvnw") ? "Twitch" :
+      "unknown";
+    const regionMatch = input.match(/([a-z]{2}-[a-z]+-\d+)/i);
+
+    return {
+      host: host || "n/a",
+      edgeId: labels.length > 4 ? labels[0] : "n/a",
+      provider,
+      role: isStaticAssetCdn ? "static assets" : "video delivery candidate",
+      region: regionMatch?.[1] || "n/a",
+      hostFamily: labels.length > 1 ? labels.slice(1).join(".") : "n/a"
+    };
+  }
+
+  function isVideoDeliveryHost(host) {
+    return Boolean(host) &&
+      host !== "static-cdn.jtvnw.net" &&
+      !host.startsWith("static-cdn.") &&
+      (
+        host.includes("hls.ttvnw.net") ||
+        host.includes("cloudfront.hls.ttvnw.net") ||
+        host.includes("twitchcdn.net") ||
+        host.includes("akamaized.net") ||
+        host.includes("fastly.net")
+      );
+  }
+
   function isMediaPerformanceEntry(entry) {
     const name = entry.name || "";
     return name.includes(".m3u8") ||
@@ -248,6 +300,10 @@
     const total = quality ? quality.totalVideoFrames : null;
     const droppedPct = total ? ((dropped / total) * 100).toFixed(2) : null;
 
+    const recentUrl = state.network.recentRequests[0]?.url ||
+      state.perfSamples[0]?.url ||
+      responsiveness.dominant?.host;
+
     return {
       page: {
         url: location.href,
@@ -276,6 +332,7 @@
       cdn: {
         dominant: responsiveness.dominant,
         responsiveness: responsiveness.label,
+        edge: getCdnEdgeDetails(recentUrl || responsiveness.dominant?.host),
         status: responsiveness.status,
         probes: state.probeSamples.slice(0, 20),
         avoidedCdns: state.network.avoidedCdns || {},
@@ -321,6 +378,10 @@
             <div class="tdc-label">Connected CDN</div>
             <div class="tdc-value" data-cdn>n/a</div>
           </div>
+          <div class="tdc-card tdc-card-wide">
+            <div class="tdc-label">Current Edge</div>
+            <div class="tdc-value" data-cdn-edge>n/a</div>
+          </div>
           <div class="tdc-card">
             <div class="tdc-label">Live Latency</div>
             <div class="tdc-value" data-latency>n/a</div>
@@ -345,6 +406,10 @@
           <button class="tdc-button" type="button" data-copy>Copy JSON</button>
           <button class="tdc-button" type="button" data-export>Download JSON</button>
           <button class="tdc-button" type="button" data-clear>Clear</button>
+        </div>
+        <div class="tdc-manual">
+          <input class="tdc-input" type="text" data-cdn-input placeholder="Paste Twitch segment URL or CDN host">
+          <button class="tdc-button tdc-danger" type="button" data-avoid-entered-cdn>Avoid Entered CDN + Reload</button>
         </div>
         <div class="tdc-card">
           <div class="tdc-label">Avoided CDNs</div>
@@ -445,6 +510,11 @@
 
     root.querySelector("[data-avoid-cdn]").addEventListener("click", async () => {
       await avoidCurrentCdn();
+    });
+
+    root.querySelector("[data-avoid-entered-cdn]").addEventListener("click", async () => {
+      const input = root.querySelector("[data-cdn-input]");
+      await avoidSpecificCdn(input?.value || "");
     });
 
     root.querySelector("[data-clear-avoids]").addEventListener("click", async () => {
@@ -550,17 +620,31 @@
 
   async function avoidCurrentCdn() {
     const diagnostics = getDiagnostics();
-    const host = diagnostics.cdn.dominant?.host || safeUrlHost(diagnostics.network.recentRequests[0]?.url);
+    const host = diagnostics.cdn.dominant?.host || parseCdnHost(diagnostics.network.recentRequests[0]?.url);
+
+    await avoidSpecificCdn(host);
+  }
+
+  async function avoidSpecificCdn(input) {
+    const host = parseCdnHost(input);
 
     if (!host) {
-      addLog("No active CDN host detected yet. Start playback, wait for requests, then try again.");
+      addLog("No CDN host found. Start playback or paste a Twitch segment URL from the network panel.");
       render();
       return;
     }
 
+    if (!isVideoDeliveryHost(host)) {
+      addLog(`${host} looks like a static asset CDN, not a Twitch video segment CDN. Not blocking it.`);
+      render();
+      return;
+    }
+
+    const edge = getCdnEdgeDetails(input || host);
     addLog(`Avoiding ${host} for 5 minutes and reloading Twitch.`);
     state.pendingSwitch = {
       old: summarizeHostStats(host),
+      oldEdge: edge,
       startedAt: Date.now(),
       url: location.href
     };
@@ -704,6 +788,7 @@
     setText(root, "[data-buffer]", fmtSeconds(diagnostics.playback.bufferAhead));
     setText(root, "[data-responsiveness]", diagnostics.cdn.responsiveness);
     setText(root, "[data-cdn]", cdnHost);
+    setText(root, "[data-cdn-edge]", formatEdgeDetails(diagnostics.cdn.edge));
     setText(root, "[data-avoided-cdns]", formatAvoidedCdns(diagnostics.cdn.avoidedCdns));
     setText(root, "[data-latency]", fmtSeconds(diagnostics.playback.liveLatency));
     setText(root, "[data-drops]", diagnostics.playback.totalVideoFrames ? `${diagnostics.playback.droppedVideoFrames} / ${diagnostics.playback.droppedFramePercent}%` : "n/a");
@@ -730,6 +815,11 @@
         return `${entry.host} (${remainingMin}m)`;
       })
       .join(", ");
+  }
+
+  function formatEdgeDetails(edge) {
+    if (!edge?.host || edge.host === "n/a") return "n/a";
+    return `${edge.provider} / ${edge.role} / edge ${edge.edgeId} / region ${edge.region}`;
   }
 
   function connectBackground() {

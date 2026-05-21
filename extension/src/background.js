@@ -91,6 +91,12 @@ function isKnownCdnHost(host) {
   return CDN_HOST_HINTS.some((hint) => host.includes(hint));
 }
 
+function isVideoDeliveryHost(host) {
+  return isKnownCdnHost(host) &&
+    host !== "static-cdn.jtvnw.net" &&
+    !host.startsWith("static-cdn.");
+}
+
 async function readAvoidedCdns() {
   const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), CDN_RULE_STORAGE_KEY);
   return result?.[CDN_RULE_STORAGE_KEY] || {};
@@ -105,8 +111,8 @@ async function writeAvoidedCdns(avoidedCdns) {
 async function applyAvoidedCdnRule(host, minutes = 5) {
   const cleanHost = sanitizeHost(host);
 
-  if (!cleanHost || !isKnownCdnHost(cleanHost)) {
-    throw new Error("Only detected Twitch CDN hosts can be avoided.");
+  if (!cleanHost || !isVideoDeliveryHost(cleanHost)) {
+    throw new Error("Only Twitch video delivery CDN hosts can be avoided. Static asset CDNs are ignored.");
   }
 
   if (!api.declarativeNetRequest?.updateDynamicRules) {

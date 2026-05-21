@@ -140,6 +140,27 @@
   margin: 12px 0;
 }
 
+.tdc-manual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  margin: 0 0 8px;
+}
+
+.tdc-input {
+  min-width: 0;
+  color: #f5f7fb;
+  background: #0e1117;
+  border: 1px solid #3a465c;
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+}
+
+.tdc-input::placeholder {
+  color: #738096;
+}
+
 .tdc-table {
   width: 100%;
   border-collapse: collapse;
@@ -189,6 +210,10 @@
   }
 
   .tdc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tdc-manual {
     grid-template-columns: 1fr;
   }
 }

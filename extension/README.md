@@ -10,6 +10,7 @@ Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox
 - manual CDN probe timing
 - temporary CDN avoid rules to force Twitch to renegotiate a different edge
 - old-vs-new CDN comparison after forcing a reconnect
+- manual segment URL or CDN host input for exact failover targeting
 - live latency estimate when Twitch exposes seekable live ranges
 - dropped-frame count and dropped-frame percentage
 - recent throughput estimate from browser resource timing
@@ -45,6 +46,8 @@ Twitch controls CDN selection internally, so the extension cannot directly choos
 6. The **CDN Switch Comparison** section shows old-vs-new CDN stats, including average and latest response-time deltas.
 
 Use **Clear Avoids** to remove all temporary CDN blocks. If Twitch reconnects to the same slow host, wait for more media requests to appear and run the avoid action again.
+
+You can also paste a full Twitch segment URL, for example a `.ts` request from the browser network panel, into the manual CDN field and click **Avoid Entered CDN + Reload**. Static asset hosts such as `static-cdn.jtvnw.net` are intentionally not blocked because they serve site assets rather than the video stream.
 
 ## Notes
 
