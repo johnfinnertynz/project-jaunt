@@ -14,6 +14,8 @@
     logs: [],
     pendingSwitch: null,
     switchHistory: [],
+    graphsVisible: false,
+    metricHistory: [],
     streamKey: ""
   };
 
@@ -140,6 +142,7 @@
     state.perfSeen = new Set();
     state.perfSamples = [];
     state.probeSamples = [];
+    state.metricHistory = [];
     if (!options.preserveSwitchTracking) {
       state.pendingSwitch = null;
       state.switchHistory = [];
@@ -410,6 +413,47 @@
     return totalBytes > 0 ? totalBytes / 30 : null;
   }
 
+  function getLatestResponseMs() {
+    const latest = getVideoRecentRequests()
+      .find((sample) => Number.isFinite(sample.durationMs));
+
+    return latest?.durationMs ?? null;
+  }
+
+  function addMetricSample(diagnostics) {
+    const latestTotalFrames = diagnostics.playback.totalVideoFrames;
+    const latestDroppedFrames = diagnostics.playback.droppedVideoFrames;
+    const previous = state.metricHistory[state.metricHistory.length - 1];
+    let droppedDelta = null;
+
+    if (
+      previous &&
+      Number.isFinite(latestTotalFrames) &&
+      Number.isFinite(latestDroppedFrames) &&
+      Number.isFinite(previous.totalFrames) &&
+      Number.isFinite(previous.droppedFrames)
+    ) {
+      const frameDelta = latestTotalFrames - previous.totalFrames;
+      const dropFrameDelta = latestDroppedFrames - previous.droppedFrames;
+      droppedDelta = frameDelta > 0 ? (dropFrameDelta / frameDelta) * 100 : 0;
+    }
+
+    state.metricHistory.push({
+      t: Date.now(),
+      buffer: diagnostics.playback.bufferAhead,
+      latency: diagnostics.playback.liveLatency,
+      responseMs: getLatestResponseMs(),
+      throughputMbps: diagnostics.performance.estimatedRecentThroughput
+        ? (diagnostics.performance.estimatedRecentThroughput * 8) / 1_000_000
+        : null,
+      droppedPct: droppedDelta,
+      totalFrames: latestTotalFrames,
+      droppedFrames: latestDroppedFrames
+    });
+
+    state.metricHistory = state.metricHistory.slice(-90);
+  }
+
   function getDiagnostics() {
     capturePerformanceEntries();
 
@@ -525,6 +569,7 @@
           <button class="tdc-button tdc-danger" type="button" data-avoid-cdn>Renegotiate CDN</button>
           <button class="tdc-button" type="button" data-client-chrome>Try Chrome Client</button>
           <button class="tdc-button" type="button" data-client-reset>Reset Client</button>
+          <button class="tdc-button" type="button" data-toggle-graphs>Show Graphs</button>
           <button class="tdc-button" type="button" data-clear-avoids>Clear Avoids</button>
           <button class="tdc-button" type="button" data-copy>Copy JSON</button>
           <button class="tdc-button" type="button" data-export>Download JSON</button>
@@ -555,6 +600,27 @@
               <tr><td colspan="5" class="tdc-muted">No switch captured yet.</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="tdc-card tdc-graphs tdc-hidden-section" data-graphs>
+          <div class="tdc-label">Rolling Graphs</div>
+          <div class="tdc-chart-grid">
+            <div>
+              <div class="tdc-chart-title">Buffer ahead</div>
+              <svg class="tdc-chart" data-chart-buffer viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
+            </div>
+            <div>
+              <div class="tdc-chart-title">CDN response</div>
+              <svg class="tdc-chart" data-chart-response viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
+            </div>
+            <div>
+              <div class="tdc-chart-title">Throughput</div>
+              <svg class="tdc-chart" data-chart-throughput viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
+            </div>
+            <div>
+              <div class="tdc-chart-title">Dropped frames</div>
+              <svg class="tdc-chart" data-chart-drops viewBox="0 0 220 72" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
         </div>
         <div class="tdc-optional">
           <div class="tdc-card">
@@ -652,6 +718,11 @@
 
     root.querySelector("[data-client-reset]").addEventListener("click", async () => {
       await setClientProfile("default");
+    });
+
+    root.querySelector("[data-toggle-graphs]").addEventListener("click", () => {
+      state.graphsVisible = !state.graphsVisible;
+      render();
     });
 
     makeDraggable(root);
@@ -939,6 +1010,60 @@
     `;
   }
 
+  function chartPath(samples, key, maxHint = null) {
+    const values = samples
+      .map((sample) => sample[key])
+      .filter((value) => Number.isFinite(value));
+
+    if (!values.length) return "";
+
+    const max = Math.max(maxHint || 0, ...values, 1);
+    const min = 0;
+    const width = 220;
+    const height = 72;
+    const lastSamples = samples.slice(-60);
+
+    return lastSamples
+      .map((sample, index) => {
+        const raw = Number.isFinite(sample[key]) ? sample[key] : null;
+        const x = lastSamples.length === 1 ? width : (index / (lastSamples.length - 1)) * width;
+        const y = raw === null ? height : height - ((raw - min) / (max - min)) * (height - 8) - 4;
+        return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${Math.max(4, Math.min(height - 4, y)).toFixed(1)}`;
+      })
+      .join(" ");
+  }
+
+  function renderChart(svg, samples, key, color, maxHint = null) {
+    if (!svg) return;
+
+    const path = chartPath(samples, key, maxHint);
+    if (!path) {
+      svg.innerHTML = `<text x="110" y="39" text-anchor="middle" class="tdc-chart-empty">waiting</text>`;
+      return;
+    }
+
+    svg.innerHTML = `
+      <line x1="0" y1="68" x2="220" y2="68" class="tdc-chart-axis"></line>
+      <path d="${path}" fill="none" stroke="${color}" stroke-width="2.4" vector-effect="non-scaling-stroke"></path>
+    `;
+  }
+
+  function renderGraphs(root) {
+    const graphs = root.querySelector("[data-graphs]");
+    const toggle = root.querySelector("[data-toggle-graphs]");
+    if (!graphs || !toggle) return;
+
+    graphs.classList.toggle("tdc-hidden-section", !state.graphsVisible);
+    toggle.textContent = state.graphsVisible ? "Hide Graphs" : "Show Graphs";
+
+    if (!state.graphsVisible) return;
+
+    renderChart(root.querySelector("[data-chart-buffer]"), state.metricHistory, "buffer", "#22c55e", 30);
+    renderChart(root.querySelector("[data-chart-response]"), state.metricHistory, "responseMs", "#60a5fa", 1000);
+    renderChart(root.querySelector("[data-chart-throughput]"), state.metricHistory, "throughputMbps", "#f59e0b", 8);
+    renderChart(root.querySelector("[data-chart-drops]"), state.metricHistory, "droppedPct", "#ef4444", 10);
+  }
+
   function render() {
     const root = document.getElementById(SELECTORS.root);
     if (!root) return;
@@ -947,6 +1072,7 @@
     if (updateSwitchTracking(diagnostics)) {
       diagnostics = getDiagnostics();
     }
+    addMetricSample(diagnostics);
     const cdnHost = diagnostics.cdn.dominant?.host || "n/a";
     const playbackState = diagnostics.playback.foundVideo
       ? `${diagnostics.playback.paused ? "paused" : "playing"} / ready ${diagnostics.playback.readyState}`
@@ -970,6 +1096,7 @@
     setText(root, "[data-log]", state.logs.join("\n"));
     renderCdnTable(root, diagnostics);
     renderSwitchComparison(root, diagnostics);
+    renderGraphs(root);
   }
 
   function togglePanel() {

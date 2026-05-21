@@ -16,6 +16,7 @@ Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox
 - recent throughput estimate from browser resource timing
 - copy or download a JSON diagnostics report
 - toggle with the extension icon or `Alt+Shift+D`
+- optional rolling graphs for buffer, CDN response time, throughput, and dropped frames
 
 ## Install In Chrome Or Edge
 

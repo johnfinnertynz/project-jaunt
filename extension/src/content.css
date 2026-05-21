@@ -198,6 +198,46 @@
   overflow-wrap: anywhere;
 }
 
+.tdc-hidden-section {
+  display: none;
+}
+
+.tdc-graphs {
+  margin-top: 8px;
+}
+
+.tdc-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.tdc-chart-title {
+  color: #9aa6ba;
+  font-size: 11px;
+  margin: 3px 0 4px;
+}
+
+.tdc-chart {
+  width: 100%;
+  height: 74px;
+  display: block;
+  background: #0e1117;
+  border: 1px solid #2a3242;
+  border-radius: 6px;
+}
+
+.tdc-chart-axis {
+  stroke: #2a3242;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.tdc-chart-empty {
+  fill: #738096;
+  font: 11px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+
 .tdc-compact .tdc-optional {
   display: none;
 }
@@ -214,6 +254,10 @@
   }
 
   .tdc-manual {
+    grid-template-columns: 1fr;
+  }
+
+  .tdc-chart-grid {
     grid-template-columns: 1fr;
   }
 }
