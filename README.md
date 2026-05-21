@@ -1,13 +1,13 @@
 # Project Jaunt
 
-Project Jaunt is the working home for rebuilding a current, professional web presence for John Finnerty.
+Project Jaunt is the working home for web, browser tooling, and diagnostics projects.
 
 The focus is practical and evidence-based:
 
-- publish accurate, current professional information
-- maintain a credible portfolio and personal website
-- document search results and removal requests
-- support future SEO, content, and reputation-repair work
+- build useful browser-based diagnostic tools
+- maintain project documentation and install notes
+- keep code and assets versioned cleanly
+- support future website and technical project work
 
 ## Website
 
@@ -17,7 +17,7 @@ https://johnfinnerty.co.nz
 
 ## Status
 
-This repository is being set up as the project hub for site content, search documentation, and related reputation-repair assets.
+This repository is being set up as the project hub for code, documentation, and technical assets.
 
 ## Twitch Diagnostics Add-on
 
