@@ -14,3 +14,7 @@ The focus is practical and evidence-based:
 The add-on is designed for diagnostics only. It does not change Twitch playback, proxy traffic, or attempt to bypass Twitch behavior.
 
 See [extension/README.md](extension/README.md) for install instructions.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

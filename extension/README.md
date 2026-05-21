@@ -43,3 +43,7 @@ The add-on stores diagnostics locally in memory while the Twitch tab is open. It
 ## Notes
 
 Browser timing APIs and Twitch internals vary by browser, stream type, and privacy settings. Some fields may show `n/a` until playback starts or until media segment requests are observed.
+
+## License
+
+MIT. See the repository `LICENSE` file.
