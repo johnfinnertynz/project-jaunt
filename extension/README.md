@@ -9,6 +9,7 @@ Twitch Diagnostics Console is a local WebExtension for Chrome, Edge, and Firefox
 - CDN request duration, last status, request count, and failure tracking
 - manual CDN probe timing
 - temporary CDN avoid rules to force Twitch to renegotiate a different edge
+- experimental CDN redirect rules that map a slow observed HLS host to another observed HLS host
 - old-vs-new CDN comparison after forcing a reconnect
 - manual segment URL or CDN host input for exact failover targeting
 - live latency estimate when Twitch exposes seekable live ranges
@@ -46,6 +47,8 @@ Twitch controls CDN selection internally, so the extension cannot directly choos
 5. The **CDN Switch Comparison** section shows old-vs-new CDN stats, including average and latest response-time deltas.
 
 If Twitch reconnects to the same slow host, click **Try Chrome Client**, then use **Renegotiate CDN** again. This experimentally changes the client signature sent to Twitch playlist allocation requests. It may not affect CDN choice because Twitch usually allocates CDN edges from IP/POP/DNS and internal capacity signals.
+
+If the CDN table shows two video delivery hosts, **Redirect CDN** can transparently redirect the dominant/current host to the best alternate observed host. This is the most aggressive browser-side experiment short of running a local HLS proxy. It only works if Twitch's segment tokens are portable across those hosts.
 
 Use **Clear Avoids** to remove all temporary CDN blocks. Hard blocking a video CDN can produce Twitch Error #2000 if Twitch reuses a playlist that still points at the blocked host, so the hard-block button is best treated as an advanced test.
 

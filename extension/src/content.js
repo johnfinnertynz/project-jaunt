@@ -6,7 +6,8 @@
     network: {
       cdnHosts: {},
       recentRequests: [],
-      avoidedCdns: {}
+      avoidedCdns: {},
+      cdnRedirect: null
     },
     perfSeen: new Set(),
     perfSamples: [],
@@ -340,6 +341,23 @@
     };
   }
 
+  function getBestRedirectTarget(fromHost) {
+    return Object.entries(getVideoCdnHosts())
+      .filter(([host, stats]) => host !== fromHost && (stats.count || 0) > 0)
+      .map(([host, stats]) => ({
+        host,
+        avgMs: stats.count ? stats.totalMs / stats.count : Number.POSITIVE_INFINITY,
+        lastMs: Number.isFinite(stats.lastMs) ? stats.lastMs : Number.POSITIVE_INFINITY,
+        count: stats.count || 0,
+        serving: getPrimaryDeliveryType(stats)
+      }))
+      .sort((a, b) => {
+        const aSegment = a.serving === "video segment" ? 0 : 1;
+        const bSegment = b.serving === "video segment" ? 0 : 1;
+        return aSegment - bSegment || a.avgMs - b.avgMs || b.count - a.count;
+      })[0]?.host || "";
+  }
+
   function updateSwitchTracking(diagnostics) {
     const pending = state.pendingSwitch;
     const currentHost = diagnostics.cdn.dominant?.host;
@@ -501,6 +519,7 @@
         status: responsiveness.status,
         probes: state.probeSamples.slice(0, 20),
         avoidedCdns: state.network.avoidedCdns || {},
+        cdnRedirect: state.network.cdnRedirect || null,
         pendingSwitch: state.pendingSwitch,
         switchHistory: state.switchHistory.slice(0, 10)
       },
@@ -569,6 +588,8 @@
           <button class="tdc-button tdc-danger" type="button" data-avoid-cdn>Renegotiate CDN</button>
           <button class="tdc-button" type="button" data-client-chrome>Try Chrome Client</button>
           <button class="tdc-button" type="button" data-client-reset>Reset Client</button>
+          <button class="tdc-button tdc-danger" type="button" data-redirect-cdn>Redirect CDN</button>
+          <button class="tdc-button" type="button" data-clear-redirect>Clear Redirect</button>
           <button class="tdc-button" type="button" data-toggle-graphs>Show Graphs</button>
           <button class="tdc-button" type="button" data-clear-avoids>Clear Avoids</button>
           <button class="tdc-button" type="button" data-copy>Copy JSON</button>
@@ -582,6 +603,10 @@
         <div class="tdc-card">
           <div class="tdc-label">Avoided CDNs</div>
           <div class="tdc-value" data-avoided-cdns>none</div>
+        </div>
+        <div class="tdc-card" style="margin-top: 8px;">
+          <div class="tdc-label">Active CDN Redirect</div>
+          <div class="tdc-value" data-cdn-redirect>none</div>
         </div>
         <div class="tdc-card" style="margin-top: 8px;">
           <div class="tdc-label">CDN Switch Comparison</div>
@@ -718,6 +743,15 @@
 
     root.querySelector("[data-client-reset]").addEventListener("click", async () => {
       await setClientProfile("default");
+    });
+
+    root.querySelector("[data-redirect-cdn]").addEventListener("click", async () => {
+      await redirectCurrentCdn();
+    });
+
+    root.querySelector("[data-clear-redirect]").addEventListener("click", async () => {
+      await clearCdnRedirect();
+      render();
     });
 
     root.querySelector("[data-toggle-graphs]").addEventListener("click", () => {
@@ -866,6 +900,64 @@
       ? "Applied experimental Chrome-like client profile to Twitch playlist requests. Reloading."
       : "Reset Twitch playlist client profile. Reloading.");
     window.setTimeout(() => location.reload(), 500);
+  }
+
+  async function redirectCurrentCdn() {
+    const diagnostics = getDiagnostics();
+    const fromHost = diagnostics.cdn.dominant?.host || parseCdnHost(getVideoRecentRequests()[0]?.url);
+    const toHost = getBestRedirectTarget(fromHost);
+
+    if (!fromHost) {
+      addLog("No current video CDN detected yet. Let the stream run for a few segment requests.");
+      render();
+      return;
+    }
+
+    if (!toHost) {
+      addLog(`No alternate video CDN has been observed yet. Wait until the CDN table shows a second video host, then try Redirect CDN.`);
+      render();
+      return;
+    }
+
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_SET_CDN_REDIRECT",
+      fromHost,
+      toHost
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not create CDN redirect: ${response?.error || "unknown error"}`);
+      render();
+      return;
+    }
+
+    state.pendingSwitch = {
+      old: summarizeHostStats(fromHost),
+      oldEdge: getCdnEdgeDetails(fromHost),
+      startedAt: Date.now(),
+      url: location.href
+    };
+    state.network.cdnRedirect = response.redirect;
+    saveSwitchState();
+    addLog(`Redirecting ${fromHost} to ${toHost}. Reloading Twitch to test token portability.`);
+    clearSessionDiagnostics("Testing transparent CDN redirect.", {
+      preserveSwitchTracking: true
+    });
+    window.setTimeout(() => location.reload(), 500);
+  }
+
+  async function clearCdnRedirect() {
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_CLEAR_CDN_REDIRECT"
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not clear CDN redirect: ${response?.error || "unknown error"}`);
+      return;
+    }
+
+    state.network.cdnRedirect = null;
+    addLog("Cleared active CDN redirect.");
   }
 
   async function avoidSpecificCdn(input) {
@@ -1089,6 +1181,7 @@
     setText(root, "[data-cdn]", cdnHost);
     setText(root, "[data-cdn-edge]", formatEdgeDetails(diagnostics.cdn.edge));
     setText(root, "[data-avoided-cdns]", formatAvoidedCdns(diagnostics.cdn.avoidedCdns));
+    setText(root, "[data-cdn-redirect]", formatCdnRedirect(diagnostics.cdn.cdnRedirect));
     setText(root, "[data-latency]", fmtSeconds(diagnostics.playback.liveLatency));
     setText(root, "[data-drops]", diagnostics.playback.totalVideoFrames ? `${diagnostics.playback.droppedVideoFrames} / ${diagnostics.playback.droppedFramePercent}%` : "n/a");
     setText(root, "[data-throughput]", fmtBitrate(diagnostics.performance.estimatedRecentThroughput));
@@ -1117,6 +1210,11 @@
       .join(", ");
   }
 
+  function formatCdnRedirect(redirect) {
+    if (!redirect?.fromHost || !redirect?.toHost) return "none";
+    return `${redirect.fromHost} -> ${redirect.toHost}`;
+  }
+
   function formatEdgeDetails(edge) {
     if (!edge?.host || edge.host === "n/a") return "n/a";
     return `${edge.provider} / ${edge.role} / edge ${edge.edgeId} / region ${edge.region}`;
@@ -1130,7 +1228,8 @@
       if (response) {
         state.network = {
           ...response,
-          avoidedCdns: response.avoidedCdns || {}
+          avoidedCdns: response.avoidedCdns || {},
+          cdnRedirect: response.cdnRedirect || null
         };
         render();
       }
@@ -1141,7 +1240,8 @@
             if (response) {
               state.network = {
                 ...response,
-                avoidedCdns: response.avoidedCdns || {}
+                avoidedCdns: response.avoidedCdns || {},
+                cdnRedirect: response.cdnRedirect || null
               };
               render();
             }
@@ -1160,7 +1260,8 @@
         state.network = {
           ...state.network,
           ...message.payload,
-          avoidedCdns: state.network.avoidedCdns || {}
+          avoidedCdns: state.network.avoidedCdns || {},
+          cdnRedirect: state.network.cdnRedirect || null
         };
         render();
       }

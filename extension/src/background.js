@@ -2,10 +2,12 @@ const api = globalThis.browser || globalThis.chrome;
 
 const requestStarts = new Map();
 const tabDiagnostics = new Map();
+const REDIRECT_RULE_ID = 18000;
 const CDN_RULE_ID_START = 20000;
 const CLIENT_RULE_ID = 19000;
 const CDN_RULE_STORAGE_KEY = "twitchDiagnosticsAvoidedCdns";
 const CLIENT_PROFILE_STORAGE_KEY = "twitchDiagnosticsClientProfile";
+const CDN_REDIRECT_STORAGE_KEY = "twitchDiagnosticsCdnRedirect";
 
 const CDN_HOST_HINTS = [
   "ttvnw.net",
@@ -145,9 +147,20 @@ async function readAvoidedCdns() {
   return result?.[CDN_RULE_STORAGE_KEY] || {};
 }
 
+async function readCdnRedirect() {
+  const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), CDN_REDIRECT_STORAGE_KEY);
+  return result?.[CDN_REDIRECT_STORAGE_KEY] || null;
+}
+
 async function writeAvoidedCdns(avoidedCdns) {
   await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
     [CDN_RULE_STORAGE_KEY]: avoidedCdns
+  });
+}
+
+async function writeCdnRedirect(redirect) {
+  await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
+    [CDN_REDIRECT_STORAGE_KEY]: redirect
   });
 }
 
@@ -224,6 +237,67 @@ async function clearAvoidedCdn(host = null) {
 
   await writeAvoidedCdns(avoidedCdns);
   return avoidedCdns;
+}
+
+async function setCdnRedirect(fromHost, toHost) {
+  const cleanFromHost = sanitizeHost(fromHost);
+  const cleanToHost = sanitizeHost(toHost);
+
+  if (!cleanFromHost || !cleanToHost || cleanFromHost === cleanToHost) {
+    throw new Error("Redirect requires two different Twitch video CDN hosts.");
+  }
+
+  if (!isVideoDeliveryHost(cleanFromHost) || !isVideoDeliveryHost(cleanToHost)) {
+    throw new Error("Redirect only supports Twitch video delivery CDN hosts.");
+  }
+
+  if (!api.declarativeNetRequest?.updateDynamicRules) {
+    throw new Error("This browser does not expose dynamic request redirect rules to the extension.");
+  }
+
+  await callExtensionApi(api.declarativeNetRequest.updateDynamicRules.bind(api.declarativeNetRequest), {
+    removeRuleIds: [REDIRECT_RULE_ID],
+    addRules: [{
+      id: REDIRECT_RULE_ID,
+      priority: 3,
+      action: {
+        type: "redirect",
+        redirect: {
+          transform: {
+            host: cleanToHost
+          }
+        }
+      },
+      condition: {
+        urlFilter: `||${cleanFromHost}^`,
+        resourceTypes: [
+          "xmlhttprequest",
+          "media",
+          "other"
+        ]
+      }
+    }]
+  });
+
+  const redirect = {
+    fromHost: cleanFromHost,
+    toHost: cleanToHost,
+    createdAt: Date.now()
+  };
+  await writeCdnRedirect(redirect);
+
+  return redirect;
+}
+
+async function clearCdnRedirect() {
+  if (api.declarativeNetRequest?.updateDynamicRules) {
+    await callExtensionApi(api.declarativeNetRequest.updateDynamicRules.bind(api.declarativeNetRequest), {
+      removeRuleIds: [REDIRECT_RULE_ID]
+    });
+  }
+
+  await writeCdnRedirect(null);
+  return null;
 }
 
 async function clearExpiredAvoidedCdns() {
@@ -416,14 +490,17 @@ async function handleRuntimeMessage(message, sender) {
   if (message?.type === "TWITCH_DIAGNOSTICS_GET_NETWORK") {
     try {
       const avoidedCdns = await readAvoidedCdns();
+      const cdnRedirect = await readCdnRedirect();
       return {
         ...getTabState(sender.tab?.id ?? -1),
-        avoidedCdns
+        avoidedCdns,
+        cdnRedirect
       };
     } catch (error) {
       return {
         ...getTabState(sender.tab?.id ?? -1),
         avoidedCdns: {},
+        cdnRedirect: null,
         error: error.message
       };
     }
@@ -452,6 +529,28 @@ async function handleRuntimeMessage(message, sender) {
       return {
         ok: true,
         ...(await setClientProfile(message.profile))
+      };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
+  if (message?.type === "TWITCH_DIAGNOSTICS_SET_CDN_REDIRECT") {
+    try {
+      return {
+        ok: true,
+        redirect: await setCdnRedirect(message.fromHost, message.toHost)
+      };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
+  if (message?.type === "TWITCH_DIAGNOSTICS_CLEAR_CDN_REDIRECT") {
+    try {
+      return {
+        ok: true,
+        redirect: await clearCdnRedirect()
       };
     } catch (error) {
       return { ok: false, error: error.message };
