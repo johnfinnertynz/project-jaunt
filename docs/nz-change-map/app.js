@@ -66,9 +66,14 @@ function colourFor(value, min, max) {
 function formatValue(value) {
   const dataset = currentDataset();
   if (dataset.unit.includes("%")) return `${Math.round(value)}%`;
-  if (dataset.unit.includes("people")) return `${Math.round(value)} people/km²`;
+  if (dataset.unit.includes("people")) return `${Math.round(value)} people/km2`;
   if (dataset.unit.includes("price")) return `${value.toFixed(1)}x`;
   return `${Math.round(value)} ${dataset.unit}`;
+}
+
+function currentPipelineRun() {
+  const runs = typeof PIPELINE_RUNS === "undefined" ? [] : PIPELINE_RUNS;
+  return runs.find((run) => run.pipeline === currentDataset().pipeline);
 }
 
 function renderTabs() {
@@ -143,12 +148,16 @@ function renderInspector() {
   document.getElementById("legend-high").textContent = dataset.highLabel;
   document.getElementById("source-link").textContent = dataset.source;
   document.getElementById("source-link").href = dataset.sourceUrl;
+  const pipelineRun = currentPipelineRun();
+  document.getElementById("pipeline-note").textContent = pipelineRun
+    ? `Local DB pipeline: ${pipelineRun.pipeline} (${pipelineRun.mode}, ${pipelineRun.rowCount} rows). ${pipelineRun.note}`
+    : "Local DB pipeline metadata unavailable.";
   inflationControl.hidden = !dataset.inflationAdjustable;
   document.documentElement.style.setProperty("--good", dataset.invertGood ? "#ef4444" : "#22c55e");
   document.documentElement.style.setProperty("--hot", dataset.invertGood ? "#22c55e" : "#ef4444");
 
   const nationalMean = values.reduce((sum, value) => sum + value, 0) / values.length;
-  document.getElementById("metric-value").textContent = `${state.year} · NZ avg ${formatValue(nationalMean)}`;
+  document.getElementById("metric-value").textContent = `${state.year} - NZ avg ${formatValue(nationalMean)}`;
 }
 
 function render() {

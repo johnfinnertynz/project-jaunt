@@ -23,6 +23,14 @@ The public Pages site includes an interactive satellite-map prototype for explor
 
 Open it at [johnfinnertynz.github.io/project-jaunt/nz-change-map/](https://johnfinnertynz.github.io/project-jaunt/nz-change-map/).
 
+The map data is generated from a local SQLite database:
+
+```powershell
+python tools\nz_change_map_pipeline.py
+```
+
+That command rebuilds `data/nz-change-map/nz-change-map.sqlite` and exports `docs/nz-change-map/data.js` for GitHub Pages.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

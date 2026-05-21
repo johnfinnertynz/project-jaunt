@@ -197,6 +197,11 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.source-box small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .control-deck {
   position: sticky;
   bottom: 0;
