@@ -60,6 +60,94 @@ const RADIO_STATIONS = {
     zoom: 6,
     marker: "Parliament audio source and AM Network distribution",
     meta: "Parliament audio when the House is sitting, carried through RNZ's AM Network and online stream."
+  },
+  "newstalk-zb": {
+    name: "Newstalk ZB",
+    stream: "https://playerservices.streamtheworld.com/api/livestream-redirect/NZME_41AAC.aac",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "Commercial talk radio network. Stream discovered through public station directories and resolved to NZME's published StreamTheWorld feed."
+  },
+  "radio-hauraki": {
+    name: "Radio Hauraki",
+    stream: "https://playerservices.streamtheworld.com/api/livestream-redirect/NZME_04AAC_SC",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "NZ rock station with Auckland network context. Stream resolved to NZME's public StreamTheWorld feed."
+  },
+  "coast": {
+    name: "Coast",
+    stream: "https://playerservices.streamtheworld.com/api/livestream-redirect/NZME_07AAC.aac",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "Classic hits network. Stream resolved to NZME's public StreamTheWorld feed."
+  },
+  "the-hits": {
+    name: "The Hits",
+    stream: "https://playerservices.streamtheworld.com/api/livestream-redirect/NZME_71AAC.aac",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "Music and local-show network. Stream resolved to NZME's public StreamTheWorld feed."
+  },
+  "mai-fm": {
+    name: "Mai FM",
+    stream: "https://mediaworks.streamguys1.com/mai_net_icy",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "Hip hop and R&B network. Stream resolved to Rova/MediaWorks' public StreamGuys feed."
+  },
+  "george-fm": {
+    name: "George FM",
+    stream: "https://mediaworks.streamguys1.com/george_net_icy",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "Dance and electronic music network. Stream resolved to Rova/MediaWorks' public StreamGuys feed."
+  },
+  "the-breeze": {
+    name: "The Breeze Auckland",
+    stream: "https://mediaworks.streamguys1.com/breeze-akl-high_icy",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland FM stream context",
+    meta: "Easy-listening Auckland stream. Resolved to Rova/MediaWorks' public StreamGuys feed."
+  },
+  "the-rock": {
+    name: "The Rock",
+    stream: "https://mediaworks.streamguys1.com/rock_net_icy",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "Rock network. Stream resolved to Rova/MediaWorks' public StreamGuys feed."
+  },
+  "magic": {
+    name: "Magic",
+    stream: "https://mediaworks.streamguys1.com/magic_net_icy",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "Classic music network. Stream resolved to Rova/MediaWorks' public StreamGuys feed."
+  },
+  "humm-fm": {
+    name: "Humm FM",
+    stream: "https://mediaworks.streamguys1.com/humm_net_icy",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "South Asian music and community radio stream. Stream resolved to Rova/MediaWorks' public StreamGuys feed."
+  },
+  "rhema": {
+    name: "Rhema",
+    stream: "https://rhema-radio.streamguys1.com/rhema.mp3",
+    coords: [-36.8485, 174.7633],
+    zoom: 6,
+    marker: "Auckland network stream context",
+    meta: "Christian radio network. Stream resolved to Rhema's public MP3 feed."
   }
 };
 
@@ -358,6 +446,23 @@ function setupRadio() {
       });
     }
   };
+
+  const radioGrid = document.getElementById("radio-grid");
+  if (radioGrid) {
+    radioGrid.replaceChildren();
+    for (const [id, station] of Object.entries(RADIO_STATIONS)) {
+      const card = document.createElement("button");
+      card.className = "radio-card";
+      card.type = "button";
+      card.dataset.station = id;
+      card.innerHTML = `
+        <span>${escapeHtml(station.marker)}</span>
+        <h3>${escapeHtml(station.name)}</h3>
+        <p>${escapeHtml(station.meta)}</p>
+      `;
+      radioGrid.appendChild(card);
+    }
+  }
 
   document.querySelectorAll(".radio-card").forEach((card) => {
     card.addEventListener("click", () => selectStation(card.dataset.station));

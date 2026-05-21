@@ -173,9 +173,10 @@
           <p class="eyebrow">Radio</p>
           <h2 id="radio-title">Broadcast locations and live streams</h2>
           <p>
-            Click a station to jump to its broadcast context and play the published live stream.
-            RNZ National and Concert use transmitter networks across New Zealand; RNZ Pacific
-            includes a shortwave transmission site at Rangitaiki, east of Taupo.
+            Click a station to jump to its broadcast context and play the resolved public stream.
+            RNZ services include official frequency and technical notes; commercial and community
+            streams are discovered from public radio directories, including Radio Garden-style
+            station discovery and Radio Browser metadata, then resolved to station/provider feeds.
           </p>
         </div>
         <div class="radio-console">
@@ -186,28 +187,7 @@
             <p id="radio-player-meta">Nationwide AM/FM network. Studio and newsroom base: Wellington.</p>
             <audio id="radio-player" controls preload="none" src="https://stream-ice.radionz.co.nz/national.mp3"></audio>
           </div>
-          <div class="radio-grid">
-            <button class="radio-card" type="button" data-station="rnz-national">
-              <span>Public radio</span>
-              <h3>RNZ National</h3>
-              <p>Broadcasts nationally on AM/FM, with major city frequencies including Auckland, Wellington, Christchurch, and Dunedin.</p>
-            </button>
-            <button class="radio-card" type="button" data-station="rnz-concert">
-              <span>Classical and arts</span>
-              <h3>RNZ Concert</h3>
-              <p>FM network for classical, jazz, arts, and specialist music programming across many NZ centres.</p>
-            </button>
-            <button class="radio-card" type="button" data-station="rnz-pacific">
-              <span>Pacific service</span>
-              <h3>RNZ International</h3>
-              <p>Shortwave service from Rangitaiki, about 41 km east of Taupo, aimed across the Pacific.</p>
-            </button>
-            <button class="radio-card" type="button" data-station="rnz-parliament">
-              <span>Parliament</span>
-              <h3>RNZ Parliament</h3>
-              <p>AM Network carrying Parliament when the House is sitting, with transmission points around NZ.</p>
-            </button>
-          </div>
+          <div class="radio-grid" id="radio-grid"></div>
           <div class="radio-source">
             <div>
               <span>Source pathway</span>
@@ -216,6 +196,14 @@
             <div>
               <span>Technical source</span>
               <a href="https://www.rnz.co.nz/international/technical" target="_blank" rel="noreferrer">RNZ Pacific transmission site note</a>
+            </div>
+            <div>
+              <span>Station discovery</span>
+              <a href="https://radio.garden/visit/new-zealand/J3F4o6Wx" target="_blank" rel="noreferrer">Radio Garden New Zealand</a>
+            </div>
+            <div>
+              <span>Stream metadata</span>
+              <a href="https://www.radio-browser.info/" target="_blank" rel="noreferrer">Radio Browser public directory</a>
             </div>
           </div>
         </div>
