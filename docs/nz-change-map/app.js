@@ -24,6 +24,17 @@ const yearSlider = document.getElementById("year-slider");
 const inflationToggle = document.getElementById("inflation-toggle");
 const inflationControl = document.getElementById("inflation-control");
 
+const DATASET_EXPLAINERS = {
+  affordability: "Higher values mean the region's typical housing or land price is taking a larger multiple of income. With inflation adjustment on, older values are expressed in 2025 terms so the time comparison is fairer.",
+  population: "This shows how tightly people are distributed across the region's land area. Dense regions usually need stronger transport, housing, water, and social infrastructure planning.",
+  fibre: "This tracks the spread of fibre-capable fixed broadband. A rising value means more premises should be able to connect to modern high-capacity internet.",
+  cellTowers: "This is an index of mobile site density and coverage pressure. It helps highlight where mobile infrastructure has been concentrated over time.",
+  work: "This compares where work is concentrating relative to where people live. Higher values point to job hubs and commuting pressure.",
+  farmland: "This estimates the share of land used for pasture, crops, and other productive rural cover. Falling values can indicate urban edge pressure, forestry conversion, or land-use change.",
+  climatePressure: "This composite is designed to combine coastal exposure, flood, heat, drought, and severe-weather risk indicators into a regional pressure score.",
+  politics: "This index is a simplified view of regional party-vote position over time. Lower values lean centre-left in this prototype; higher values lean centre-right."
+};
+
 function yearIndex() {
   return YEARS.indexOf(Number(state.year));
 }
@@ -76,6 +87,60 @@ function currentPipelineRun() {
   return runs.find((run) => run.pipeline === currentDataset().pipeline);
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[char]));
+}
+
+function regionRank(regionId, values) {
+  const ranked = REGIONS
+    .map((region, index) => ({ id: region.id, value: values[index] }))
+    .sort((left, right) => right.value - left.value);
+  return ranked.findIndex((region) => region.id === regionId) + 1;
+}
+
+function formatDelta(delta) {
+  const dataset = currentDataset();
+  const sign = delta > 0 ? "+" : "";
+  if (dataset.unit.includes("%")) return `${sign}${Math.round(delta)} percentage points`;
+  if (dataset.unit.includes("people")) return `${sign}${Math.round(delta)} people/km2`;
+  if (dataset.unit.includes("price")) return `${sign}${delta.toFixed(1)}x`;
+  return `${sign}${Math.round(delta)} ${dataset.unit}`;
+}
+
+function popupContent(region, label, values) {
+  const dataset = currentDataset();
+  const value = adjustedValue(region.id);
+  const firstValue = state.dataset === "affordability" && state.inflationAdjusted
+    ? rawValue(region.id) / 1.76
+    : (dataset.values[region.id] || [value])[0];
+  const nationalMean = values.reduce((sum, item) => sum + item, 0) / values.length;
+  const rank = regionRank(region.id, values);
+  const areaLine = region.landAreaSqKm
+    ? `<li><span>Land area</span><strong>${Math.round(region.landAreaSqKm).toLocaleString()} km2</strong></li>`
+    : "";
+
+  return `
+    <div class="region-popup">
+      <p class="popup-title">${escapeHtml(region.name)}</p>
+      <p class="popup-meta">${escapeHtml(dataset.label)}, ${state.year}: <strong>${escapeHtml(label)}</strong></p>
+      <ul class="popup-list">
+        <li><span>National average</span><strong>${escapeHtml(formatValue(nationalMean))}</strong></li>
+        <li><span>Regional rank</span><strong>${rank} of ${REGIONS.length} by value</strong></li>
+        <li><span>Change since ${YEARS[0]}</span><strong>${escapeHtml(formatDelta(value - firstValue))}</strong></li>
+        ${areaLine}
+      </ul>
+      <p class="popup-explainer">${escapeHtml(DATASET_EXPLAINERS[state.dataset] || dataset.summary)}</p>
+      <p class="popup-status">Prototype seed value from the local SQLite pipeline. Treat it as directional until the live source parser is connected.</p>
+    </div>
+  `;
+}
+
 function renderTabs() {
   tabs.replaceChildren();
   for (const [id, dataset] of Object.entries(DATASETS)) {
@@ -105,23 +170,20 @@ function renderRegions() {
     const colour = colourFor(value, min, max);
     const label = formatValue(value);
 
-    const polygon = L.polygon(region.shape, {
-      color: "rgba(255,255,255,0.86)",
-      dashArray: "4 5",
-      fillColor: colour,
-      fillOpacity: 0.48,
-      opacity: 0.95,
-      weight: 1.8
+    const polygon = L.geoJSON(region.geometry, {
+      style: {
+        color: "rgba(255,255,255,0.94)",
+        fillColor: colour,
+        fillOpacity: 0.36,
+        opacity: 0.98,
+        weight: 1.35
+      }
     })
-      .bindPopup(`
-        <p class="popup-title">${region.name}</p>
-        <p class="popup-meta">${currentDataset().label}, ${state.year}: <strong>${label}</strong></p>
-        <p class="popup-meta">Prototype seed value. Connect source pipeline before treating as official.</p>
-      `)
+      .bindPopup(popupContent(region, label, values), { maxWidth: 360 })
       .addTo(map);
 
-    polygon.on("mouseover", () => polygon.setStyle({ fillOpacity: 0.68, weight: 3 }));
-    polygon.on("mouseout", () => polygon.setStyle({ fillOpacity: 0.48, weight: 1.8 }));
+    polygon.on("mouseover", () => polygon.setStyle({ fillOpacity: 0.56, weight: 2.8 }));
+    polygon.on("mouseout", () => polygon.setStyle({ fillOpacity: 0.36, weight: 1.35 }));
 
     const labelIcon = L.divIcon({
       className: "",

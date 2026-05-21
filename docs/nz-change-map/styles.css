@@ -77,6 +77,10 @@ a {
   color: var(--accent);
 }
 
+.brand-bar span {
+  color: var(--accent);
+}
+
 .inspector {
   position: absolute;
   top: 16px;
@@ -281,6 +285,10 @@ input[type="range"] {
   background: #101820;
 }
 
+.leaflet-popup-content {
+  margin: 16px;
+}
+
 .popup-title {
   margin: 0 0 8px;
   color: var(--ink);
@@ -288,8 +296,46 @@ input[type="range"] {
 }
 
 .popup-meta {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
+.popup-list {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.popup-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+
+.popup-list span {
+  color: var(--muted);
+}
+
+.popup-list strong {
+  color: var(--ink);
+  text-align: right;
+}
+
+.popup-explainer,
+.popup-status {
   margin: 0;
   color: var(--muted);
+  line-height: 1.45;
+}
+
+.popup-status {
+  margin-top: 10px;
+  color: #d7e2ee;
+  font-size: 0.78rem;
 }
 
 @media (max-width: 980px) {

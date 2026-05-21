@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sqlite3
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,10 +26,13 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "data" / "nz-change-map" / "nz-change-map.sqlite"
 EXPORT_PATH = ROOT / "docs" / "nz-change-map" / "data.js"
+BOUNDARY_SERVICE_URL = "https://services.arcgis.com/XTtANUDT8Va4DLwI/arcgis/rest/services/Regional_Council_Boundary/FeatureServer/0/query"
+BOUNDARY_SOURCE_URL = "https://datafinder.stats.govt.nz/layer/111182-regional-council-2023-generalised/"
+BOUNDARY_SIMPLIFY_TOLERANCE = 0.0025
 
 YEARS = [2000, 2005, 2010, 2015, 2020, 2025]
 
-REGIONS = [
+FALLBACK_REGIONS = [
     {
         "id": "northland",
         "name": "Northland",
@@ -218,6 +224,13 @@ DATASETS = [
 
 SOURCES = [
     {
+        "id": "stats_nz_boundaries",
+        "name": "Regional Council 2023 generalised boundaries",
+        "owner": "Stats NZ Geographic Data Service",
+        "url": BOUNDARY_SOURCE_URL,
+        "notes": "Official regional council boundaries, generalised for rapid thematic web mapping.",
+    },
+    {
         "id": "mhud_housing",
         "name": "MHUD Local Housing Statistics",
         "owner": "Ministry of Housing and Urban Development",
@@ -293,9 +306,15 @@ SEED_SERIES = {
         "auckland": [4.6, 5.7, 7.8, 10.3, 11.5, 9.4],
         "waikato": [3.3, 3.8, 5.1, 6.8, 8.2, 7.0],
         "bay-of-plenty": [3.6, 4.2, 5.6, 7.6, 9.1, 7.8],
+        "gisborne": [2.8, 3.2, 4.2, 5.8, 7.4, 6.7],
         "hawkes-bay": [2.9, 3.3, 4.4, 5.9, 7.5, 6.6],
+        "taranaki": [2.7, 3.0, 3.9, 5.0, 6.2, 5.6],
+        "manawatu-whanganui": [2.6, 2.9, 3.7, 4.8, 5.8, 5.2],
         "wellington": [4.0, 4.8, 6.2, 7.7, 9.6, 7.9],
-        "tasman-nelson": [3.7, 4.3, 5.5, 7.2, 8.7, 7.6],
+        "west-coast": [2.1, 2.4, 3.0, 3.8, 4.7, 4.3],
+        "tasman": [3.5, 4.1, 5.2, 6.9, 8.4, 7.3],
+        "nelson": [3.9, 4.6, 5.9, 7.6, 9.0, 7.9],
+        "marlborough": [3.4, 3.9, 5.0, 6.5, 7.9, 7.0],
         "canterbury": [3.4, 4.1, 5.1, 5.8, 6.7, 6.2],
         "otago": [3.0, 3.5, 4.6, 6.5, 8.6, 7.4],
         "southland": [2.2, 2.4, 3.0, 3.7, 4.6, 4.2],
@@ -305,9 +324,15 @@ SEED_SERIES = {
         "auckland": [210, 235, 260, 300, 340, 365],
         "waikato": [13, 15, 16, 18, 21, 23],
         "bay-of-plenty": [18, 20, 22, 25, 30, 33],
+        "gisborne": [6, 6.2, 6.5, 6.9, 7.5, 8],
         "hawkes-bay": [11, 12, 13, 14, 16, 17],
+        "taranaki": [15, 15, 16, 16, 17, 18],
+        "manawatu-whanganui": [10, 10, 11, 11, 12, 13],
         "wellington": [60, 64, 68, 73, 79, 82],
-        "tasman-nelson": [9, 10, 11, 12, 14, 15],
+        "west-coast": [1.5, 1.4, 1.4, 1.4, 1.4, 1.5],
+        "tasman": [5, 5.3, 5.7, 6.1, 6.8, 7.3],
+        "nelson": [105, 110, 116, 123, 131, 136],
+        "marlborough": [4.1, 4.2, 4.4, 4.7, 5.0, 5.3],
         "canterbury": [12, 13, 14, 16, 18, 20],
         "otago": [7, 7, 8, 9, 10, 11],
         "southland": [3, 3, 3, 3.2, 3.4, 3.5],
@@ -317,9 +342,15 @@ SEED_SERIES = {
         "auckland": [0, 2, 24, 67, 86, 92],
         "waikato": [0, 1, 15, 51, 78, 88],
         "bay-of-plenty": [0, 1, 14, 49, 77, 87],
+        "gisborne": [0, 0, 7, 32, 63, 76],
         "hawkes-bay": [0, 0, 12, 45, 73, 84],
+        "taranaki": [0, 0, 10, 39, 70, 82],
+        "manawatu-whanganui": [0, 0, 9, 37, 69, 81],
         "wellington": [0, 2, 22, 66, 87, 93],
-        "tasman-nelson": [0, 0, 8, 38, 70, 82],
+        "west-coast": [0, 0, 4, 18, 44, 61],
+        "tasman": [0, 0, 7, 34, 66, 80],
+        "nelson": [0, 0, 12, 48, 78, 88],
+        "marlborough": [0, 0, 7, 33, 65, 79],
         "canterbury": [0, 2, 20, 62, 84, 91],
         "otago": [0, 1, 12, 48, 75, 86],
         "southland": [0, 0, 7, 33, 63, 76],
@@ -329,9 +360,15 @@ SEED_SERIES = {
         "auckland": [90, 120, 165, 220, 285, 330],
         "waikato": [34, 46, 65, 88, 116, 137],
         "bay-of-plenty": [28, 38, 55, 78, 105, 125],
+        "gisborne": [9, 13, 19, 28, 38, 46],
         "hawkes-bay": [20, 28, 39, 54, 70, 82],
+        "taranaki": [16, 22, 31, 43, 57, 67],
+        "manawatu-whanganui": [22, 30, 42, 58, 76, 90],
         "wellington": [58, 74, 98, 130, 168, 190],
-        "tasman-nelson": [16, 22, 31, 43, 56, 65],
+        "west-coast": [7, 10, 14, 20, 27, 32],
+        "tasman": [10, 14, 20, 28, 37, 44],
+        "nelson": [12, 16, 23, 32, 42, 49],
+        "marlborough": [11, 15, 22, 31, 41, 48],
         "canterbury": [52, 70, 96, 132, 178, 205],
         "otago": [26, 34, 47, 64, 85, 99],
         "southland": [12, 16, 23, 32, 42, 49],
@@ -341,9 +378,15 @@ SEED_SERIES = {
         "auckland": [150, 160, 173, 190, 205, 214],
         "waikato": [55, 58, 62, 70, 78, 82],
         "bay-of-plenty": [46, 50, 55, 63, 72, 78],
+        "gisborne": [28, 29, 31, 34, 38, 40],
         "hawkes-bay": [35, 37, 40, 45, 50, 52],
+        "taranaki": [36, 38, 40, 44, 49, 52],
+        "manawatu-whanganui": [38, 40, 43, 48, 54, 57],
         "wellington": [112, 118, 126, 136, 145, 148],
-        "tasman-nelson": [31, 33, 35, 39, 44, 46],
+        "west-coast": [18, 18, 19, 20, 22, 23],
+        "tasman": [27, 29, 31, 34, 39, 41],
+        "nelson": [52, 55, 58, 64, 72, 76],
+        "marlborough": [29, 31, 33, 37, 42, 44],
         "canterbury": [90, 96, 104, 118, 132, 140],
         "otago": [42, 45, 49, 58, 68, 72],
         "southland": [25, 26, 27, 29, 31, 32],
@@ -353,9 +396,15 @@ SEED_SERIES = {
         "auckland": [32, 30, 28, 25, 22, 20],
         "waikato": [62, 61, 60, 58, 56, 55],
         "bay-of-plenty": [43, 42, 40, 38, 36, 35],
+        "gisborne": [50, 49, 48, 46, 44, 43],
         "hawkes-bay": [55, 54, 53, 51, 49, 48],
+        "taranaki": [58, 57, 56, 54, 52, 51],
+        "manawatu-whanganui": [57, 56, 55, 53, 51, 50],
         "wellington": [38, 37, 35, 33, 31, 30],
-        "tasman-nelson": [31, 30, 29, 28, 27, 26],
+        "west-coast": [18, 17, 17, 16, 15, 15],
+        "tasman": [34, 33, 32, 31, 30, 29],
+        "nelson": [12, 11, 10, 9, 8, 8],
+        "marlborough": [38, 37, 36, 35, 34, 33],
         "canterbury": [58, 58, 57, 56, 55, 54],
         "otago": [50, 49, 48, 47, 46, 45],
         "southland": [64, 64, 63, 62, 61, 60],
@@ -365,9 +414,15 @@ SEED_SERIES = {
         "auckland": [26, 30, 36, 43, 52, 60],
         "waikato": [18, 21, 27, 34, 42, 50],
         "bay-of-plenty": [25, 29, 36, 44, 54, 63],
+        "gisborne": [26, 31, 40, 51, 65, 73],
         "hawkes-bay": [24, 29, 37, 48, 62, 70],
+        "taranaki": [20, 23, 29, 36, 45, 53],
+        "manawatu-whanganui": [19, 23, 30, 38, 49, 58],
         "wellington": [20, 23, 29, 36, 45, 52],
-        "tasman-nelson": [21, 25, 32, 40, 51, 60],
+        "west-coast": [22, 27, 35, 44, 56, 66],
+        "tasman": [19, 23, 30, 38, 48, 57],
+        "nelson": [21, 25, 32, 40, 50, 58],
+        "marlborough": [20, 24, 31, 39, 49, 58],
         "canterbury": [19, 23, 31, 41, 53, 62],
         "otago": [17, 20, 27, 35, 45, 54],
         "southland": [14, 17, 22, 29, 37, 45],
@@ -377,9 +432,15 @@ SEED_SERIES = {
         "auckland": [48, 50, 52, 55, 50, 52],
         "waikato": [58, 60, 63, 66, 61, 65],
         "bay-of-plenty": [60, 62, 65, 68, 63, 66],
+        "gisborne": [49, 51, 54, 57, 51, 55],
         "hawkes-bay": [50, 52, 55, 57, 51, 54],
+        "taranaki": [58, 60, 63, 66, 60, 64],
+        "manawatu-whanganui": [51, 53, 56, 59, 52, 56],
         "wellington": [38, 37, 40, 42, 35, 38],
-        "tasman-nelson": [48, 50, 54, 57, 51, 54],
+        "west-coast": [49, 50, 53, 56, 50, 53],
+        "tasman": [53, 55, 59, 62, 56, 59],
+        "nelson": [43, 44, 47, 49, 42, 45],
+        "marlborough": [55, 57, 60, 63, 57, 60],
         "canterbury": [55, 57, 60, 63, 58, 61],
         "otago": [46, 48, 51, 53, 47, 50],
         "southland": [62, 64, 67, 70, 65, 68],
@@ -397,6 +458,187 @@ PIPELINE_NOTES = {
     "climate_pressure": "Seeded now. Target: MfE, NIWA, and council hazard layers composited by region.",
     "electoral_commission_results": "Seeded now. Target: Electoral Commission party vote by electorate mapped to regions.",
 }
+
+
+def boundary_query_url() -> str:
+    params = {
+        "where": "REGC_code <> '99'",
+        "outFields": "*",
+        "returnGeometry": "true",
+        "outSR": "4326",
+        "f": "geojson",
+    }
+    return f"{BOUNDARY_SERVICE_URL}?{urllib.parse.urlencode(params)}"
+
+
+def fetch_boundary_geojson() -> dict[str, Any]:
+    request = urllib.request.Request(
+        boundary_query_url(),
+        headers={"User-Agent": "Project-Jaunt-NZ-Change-Map/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def perpendicular_distance(point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]) -> float:
+    x, y = point
+    x1, y1 = start
+    x2, y2 = end
+    if x1 == x2 and y1 == y2:
+        return math.hypot(x - x1, y - y1)
+    numerator = abs((y2 - y1) * x - (x2 - x1) * y + x2 * y1 - y2 * x1)
+    denominator = math.hypot(y2 - y1, x2 - x1)
+    return numerator / denominator
+
+
+def douglas_peucker(points: list[tuple[float, float]], tolerance: float) -> list[tuple[float, float]]:
+    if len(points) <= 2:
+        return points
+
+    start = points[0]
+    end = points[-1]
+    max_distance = -1.0
+    index = 0
+    for point_index in range(1, len(points) - 1):
+        distance = perpendicular_distance(points[point_index], start, end)
+        if distance > max_distance:
+            max_distance = distance
+            index = point_index
+
+    if max_distance > tolerance:
+        left = douglas_peucker(points[: index + 1], tolerance)
+        right = douglas_peucker(points[index:], tolerance)
+        return left[:-1] + right
+    return [start, end]
+
+
+def simplify_ring(ring: list[list[float]], tolerance: float) -> list[list[float]]:
+    if len(ring) <= 8:
+        return [[round(point[0], 5), round(point[1], 5)] for point in ring]
+
+    points = [(float(point[0]), float(point[1])) for point in ring]
+    if points[0] == points[-1]:
+        points = points[:-1]
+
+    anchor = points[0]
+    split_index = max(
+        range(1, len(points)),
+        key=lambda index: math.hypot(points[index][0] - anchor[0], points[index][1] - anchor[1]),
+    )
+    rotated = points[split_index:] + points[:split_index] + [points[split_index]]
+    simplified = douglas_peucker(rotated, tolerance)
+    if simplified[0] != simplified[-1]:
+        simplified.append(simplified[0])
+
+    if len(simplified) < 5:
+        simplified = rotated
+
+    return [[round(point[0], 5), round(point[1], 5)] for point in simplified]
+
+
+def simplify_geometry(geometry: dict[str, Any], tolerance: float = BOUNDARY_SIMPLIFY_TOLERANCE) -> dict[str, Any]:
+    if geometry["type"] == "Polygon":
+        return {
+            "type": "Polygon",
+            "coordinates": [simplify_ring(ring, tolerance) for ring in geometry["coordinates"]],
+        }
+    if geometry["type"] == "MultiPolygon":
+        return {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [simplify_ring(ring, tolerance) for ring in polygon]
+                for polygon in geometry["coordinates"]
+            ],
+        }
+    raise ValueError(f"Unsupported boundary geometry type: {geometry['type']}")
+
+
+def ring_area_and_centroid(ring: list[list[float]]) -> tuple[float, tuple[float, float]]:
+    area = 0.0
+    centroid_x = 0.0
+    centroid_y = 0.0
+    for index in range(len(ring) - 1):
+        x1, y1 = ring[index]
+        x2, y2 = ring[index + 1]
+        cross = x1 * y2 - x2 * y1
+        area += cross
+        centroid_x += (x1 + x2) * cross
+        centroid_y += (y1 + y2) * cross
+
+    area *= 0.5
+    if abs(area) < 0.000001:
+        xs = [point[0] for point in ring]
+        ys = [point[1] for point in ring]
+        return 0.0, (sum(xs) / len(xs), sum(ys) / len(ys))
+
+    return area, (centroid_x / (6 * area), centroid_y / (6 * area))
+
+
+def geometry_label_point(geometry: dict[str, Any]) -> list[float]:
+    if geometry["type"] == "Polygon":
+        rings = [geometry["coordinates"][0]]
+    else:
+        rings = [polygon[0] for polygon in geometry["coordinates"]]
+
+    _, centroid = max(
+        (ring_area_and_centroid(ring) for ring in rings),
+        key=lambda item: abs(item[0]),
+    )
+    lon, lat = centroid
+    return [round(lat, 5), round(lon, 5)]
+
+
+def region_id_from_name(name: str) -> str:
+    clean = name.removesuffix(" Region").lower()
+    clean = clean.replace("'", "").replace(" ", "-")
+    return clean
+
+
+def fallback_geometry_from_shape(shape: list[list[float]]) -> dict[str, Any]:
+    coordinates = [[round(lng, 5), round(lat, 5)] for lat, lng in shape]
+    if coordinates[0] != coordinates[-1]:
+        coordinates.append(coordinates[0])
+    return {"type": "Polygon", "coordinates": [coordinates]}
+
+
+def load_regions() -> tuple[list[dict[str, Any]], str, str]:
+    try:
+        boundary_data = fetch_boundary_geojson()
+        regions = []
+        for feature in boundary_data["features"]:
+            props = feature["properties"]
+            name = props["REGC_name_ascii"].removesuffix(" Region")
+            geometry = simplify_geometry(feature["geometry"])
+            regions.append(
+                {
+                    "id": region_id_from_name(props["REGC_name_ascii"]),
+                    "name": name,
+                    "coords": geometry_label_point(geometry),
+                    "geometry": geometry,
+                    "land_area_sq_km": round(float(props["LAND_AREA_SQ_KM"]), 1),
+                }
+            )
+        return (
+            sorted(regions, key=lambda region: region["name"]),
+            "source",
+            "Loaded Stats NZ regional council boundaries and simplified them for browser rendering.",
+        )
+    except Exception as exc:
+        print(f"Boundary fetch failed; using fallback region geometry: {exc}")
+        return (
+            [
+                {
+                    "id": region["id"],
+                    "name": region["name"],
+                    "coords": region["coords"],
+                    "geometry": fallback_geometry_from_shape(region["shape"]),
+                    "land_area_sq_km": None,
+                }
+                for region in FALLBACK_REGIONS
+            ],
+            "fallback",
+            f"Stats NZ boundary fetch failed, so coarse built-in geometry was used: {exc}",
+        )
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -426,6 +668,7 @@ def reset_schema(conn: sqlite3.Connection) -> None:
           name TEXT NOT NULL,
           lat REAL NOT NULL,
           lon REAL NOT NULL,
+          land_area_sq_km REAL,
           shape_json TEXT NOT NULL
         );
 
@@ -483,12 +726,12 @@ def reset_schema(conn: sqlite3.Connection) -> None:
     )
 
 
-def insert_reference_data(conn: sqlite3.Connection) -> None:
+def insert_reference_data(conn: sqlite3.Connection, regions: list[dict[str, Any]]) -> None:
     conn.executemany("INSERT INTO years (year) VALUES (?)", [(year,) for year in YEARS])
     conn.executemany(
         """
-        INSERT INTO regions (id, name, lat, lon, shape_json)
-        VALUES (:id, :name, :lat, :lon, :shape_json)
+        INSERT INTO regions (id, name, lat, lon, land_area_sq_km, shape_json)
+        VALUES (:id, :name, :lat, :lon, :land_area_sq_km, :shape_json)
         """,
         [
             {
@@ -496,9 +739,10 @@ def insert_reference_data(conn: sqlite3.Connection) -> None:
                 "name": region["name"],
                 "lat": region["coords"][0],
                 "lon": region["coords"][1],
-                "shape_json": json.dumps(region["shape"], separators=(",", ":")),
+                "land_area_sq_km": region["land_area_sq_km"],
+                "shape_json": json.dumps(region["geometry"], separators=(",", ":")),
             }
-            for region in REGIONS
+            for region in regions
         ],
     )
     conn.executemany(
@@ -543,9 +787,11 @@ def insert_reference_data(conn: sqlite3.Connection) -> None:
     )
 
 
-def run_seed_pipeline(conn: sqlite3.Connection, dataset: Dataset) -> int:
+def run_seed_pipeline(conn: sqlite3.Connection, dataset: Dataset, region_ids: set[str]) -> int:
     rows = []
     for region_id, series in SEED_SERIES[dataset.id].items():
+        if region_id not in region_ids:
+            continue
         for year, value in zip(YEARS, series):
             rows.append((dataset.id, region_id, year, float(value), "seed"))
 
@@ -575,10 +821,19 @@ def run_seed_pipeline(conn: sqlite3.Connection, dataset: Dataset) -> int:
 def build_database(db_path: Path) -> None:
     conn = connect(db_path)
     try:
+        regions, boundary_mode, boundary_note = load_regions()
+        region_ids = {region["id"] for region in regions}
         reset_schema(conn)
-        insert_reference_data(conn)
+        insert_reference_data(conn, regions)
+        conn.execute(
+            """
+            INSERT INTO pipeline_runs (pipeline, source_url, mode, note, row_count)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            ("regional_boundaries", BOUNDARY_SOURCE_URL, boundary_mode, boundary_note, len(regions)),
+        )
         for dataset in DATASETS:
-            run_seed_pipeline(conn, dataset)
+            run_seed_pipeline(conn, dataset, region_ids)
         conn.commit()
     finally:
         conn.close()
@@ -600,7 +855,8 @@ def export_frontend_data(db_path: Path, export_path: Path) -> None:
                     "id": row["id"],
                     "name": row["name"],
                     "coords": [row["lat"], row["lon"]],
-                    "shape": json.loads(row["shape_json"]),
+                    "landAreaSqKm": row["land_area_sq_km"],
+                    "geometry": json.loads(row["shape_json"]),
                 }
             )
 

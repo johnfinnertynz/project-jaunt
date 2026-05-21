@@ -13,6 +13,8 @@ It writes:
 
 Current pipelines are source-aware seed adapters. They store source URLs, pipeline names, and notes in `pipeline_runs` so live parsers can replace each seed adapter without changing the frontend data contract.
 
+The `regions` table is populated from the Stats NZ regional council boundary service when the pipeline runs, then simplified for fast browser rendering. If the service is unavailable, the script falls back to coarse built-in shapes so the export still completes.
+
 Useful tables:
 
 - `regions`
