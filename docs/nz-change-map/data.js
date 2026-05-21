@@ -25129,6 +25129,438 @@ const NZ_CHANGE_MAP_DATA = {
           53.0
         ]
       }
+    },
+    "drugUse": {
+      "label": "Drug harm and substance use",
+      "shortLabel": "Drug harm",
+      "unit": "risk index",
+      "metricLabel": "Substance-use harm index",
+      "summary": "Compare regional substance-use pressure using a future blend of New Zealand Health Survey results, harm indicators, wastewater/drug monitoring where available, and health-service demand.",
+      "source": "New Zealand Health Survey, Health NZ substance-use releases, NZ Drug Harm Index",
+      "sourceUrl": "https://www.healthnz.govt.nz/about-us/health-data/health-surveys/new-zealand-health-survey",
+      "lowLabel": "Lower pressure",
+      "highLabel": "Higher pressure",
+      "pipeline": "health_drug_harm",
+      "invertGood": false,
+      "inflationAdjustable": false,
+      "values": {
+        "auckland": [
+          30.0,
+          32.0,
+          36.0,
+          41.0,
+          48.0,
+          52.0
+        ],
+        "bay-of-plenty": [
+          34.0,
+          36.0,
+          42.0,
+          49.0,
+          58.0,
+          64.0
+        ],
+        "canterbury": [
+          29.0,
+          31.0,
+          35.0,
+          40.0,
+          46.0,
+          51.0
+        ],
+        "gisborne": [
+          38.0,
+          41.0,
+          48.0,
+          56.0,
+          66.0,
+          72.0
+        ],
+        "hawkes-bay": [
+          35.0,
+          38.0,
+          44.0,
+          51.0,
+          61.0,
+          67.0
+        ],
+        "manawatu-whanganui": [
+          34.0,
+          37.0,
+          43.0,
+          51.0,
+          60.0,
+          66.0
+        ],
+        "marlborough": [
+          27.0,
+          29.0,
+          33.0,
+          38.0,
+          44.0,
+          49.0
+        ],
+        "nelson": [
+          28.0,
+          30.0,
+          34.0,
+          39.0,
+          45.0,
+          49.0
+        ],
+        "northland": [
+          36.0,
+          38.0,
+          42.0,
+          47.0,
+          54.0,
+          58.0
+        ],
+        "otago": [
+          28.0,
+          30.0,
+          34.0,
+          39.0,
+          45.0,
+          50.0
+        ],
+        "southland": [
+          33.0,
+          36.0,
+          42.0,
+          49.0,
+          58.0,
+          64.0
+        ],
+        "taranaki": [
+          30.0,
+          33.0,
+          38.0,
+          44.0,
+          52.0,
+          57.0
+        ],
+        "tasman": [
+          25.0,
+          27.0,
+          31.0,
+          35.0,
+          40.0,
+          44.0
+        ],
+        "waikato": [
+          32.0,
+          35.0,
+          40.0,
+          46.0,
+          55.0,
+          61.0
+        ],
+        "wellington": [
+          26.0,
+          28.0,
+          32.0,
+          36.0,
+          41.0,
+          45.0
+        ],
+        "west-coast": [
+          37.0,
+          40.0,
+          45.0,
+          53.0,
+          62.0,
+          68.0
+        ]
+      }
+    },
+    "crimeRate": {
+      "label": "Recorded crime rate",
+      "shortLabel": "Crime",
+      "unit": "victimisations/1k",
+      "metricLabel": "Recorded victimisations per 1,000 people",
+      "summary": "Track recorded crime victimisation pressure across regions. The production layer should join Police victimisation counts with regional population estimates.",
+      "source": "New Zealand Police policedata.nz and Stats NZ population estimates",
+      "sourceUrl": "https://www.police.govt.nz/about-us/publications-statistics/data-and-statistics/policedatanz",
+      "lowLabel": "Lower rate",
+      "highLabel": "Higher rate",
+      "pipeline": "police_crime_rate",
+      "invertGood": false,
+      "inflationAdjustable": false,
+      "values": {
+        "auckland": [
+          62.0,
+          66.0,
+          72.0,
+          80.0,
+          86.0,
+          91.0
+        ],
+        "bay-of-plenty": [
+          72.0,
+          75.0,
+          82.0,
+          90.0,
+          99.0,
+          106.0
+        ],
+        "canterbury": [
+          56.0,
+          58.0,
+          63.0,
+          69.0,
+          76.0,
+          81.0
+        ],
+        "gisborne": [
+          78.0,
+          82.0,
+          90.0,
+          99.0,
+          110.0,
+          118.0
+        ],
+        "hawkes-bay": [
+          70.0,
+          74.0,
+          82.0,
+          91.0,
+          102.0,
+          109.0
+        ],
+        "manawatu-whanganui": [
+          66.0,
+          70.0,
+          78.0,
+          87.0,
+          96.0,
+          104.0
+        ],
+        "marlborough": [
+          47.0,
+          50.0,
+          55.0,
+          61.0,
+          67.0,
+          72.0
+        ],
+        "nelson": [
+          52.0,
+          55.0,
+          61.0,
+          67.0,
+          74.0,
+          79.0
+        ],
+        "northland": [
+          73.0,
+          76.0,
+          82.0,
+          88.0,
+          94.0,
+          98.0
+        ],
+        "otago": [
+          44.0,
+          46.0,
+          50.0,
+          55.0,
+          61.0,
+          65.0
+        ],
+        "southland": [
+          49.0,
+          52.0,
+          58.0,
+          65.0,
+          72.0,
+          78.0
+        ],
+        "taranaki": [
+          54.0,
+          57.0,
+          63.0,
+          69.0,
+          75.0,
+          79.0
+        ],
+        "tasman": [
+          38.0,
+          40.0,
+          44.0,
+          48.0,
+          52.0,
+          55.0
+        ],
+        "waikato": [
+          68.0,
+          72.0,
+          78.0,
+          86.0,
+          95.0,
+          101.0
+        ],
+        "wellington": [
+          50.0,
+          52.0,
+          57.0,
+          63.0,
+          69.0,
+          73.0
+        ],
+        "west-coast": [
+          55.0,
+          58.0,
+          64.0,
+          72.0,
+          79.0,
+          84.0
+        ]
+      }
+    },
+    "demographics": {
+      "label": "Demographic change",
+      "shortLabel": "Demographics",
+      "unit": "change index",
+      "metricLabel": "Age and ethnic diversity change index",
+      "summary": "Show how the population mix changes over time, combining age structure, ethnic diversity, migration, and urbanisation indicators.",
+      "source": "Stats NZ census, population estimates, age, ethnicity, and migration tables",
+      "sourceUrl": "https://www.stats.govt.nz/topics/population/",
+      "lowLabel": "Slower change",
+      "highLabel": "Faster change",
+      "pipeline": "stats_nz_demographics",
+      "invertGood": false,
+      "inflationAdjustable": false,
+      "values": {
+        "auckland": [
+          55.0,
+          60.0,
+          67.0,
+          75.0,
+          84.0,
+          90.0
+        ],
+        "bay-of-plenty": [
+          33.0,
+          37.0,
+          43.0,
+          51.0,
+          61.0,
+          69.0
+        ],
+        "canterbury": [
+          34.0,
+          38.0,
+          44.0,
+          52.0,
+          61.0,
+          69.0
+        ],
+        "gisborne": [
+          30.0,
+          34.0,
+          40.0,
+          48.0,
+          57.0,
+          65.0
+        ],
+        "hawkes-bay": [
+          31.0,
+          34.0,
+          39.0,
+          46.0,
+          54.0,
+          61.0
+        ],
+        "manawatu-whanganui": [
+          29.0,
+          32.0,
+          37.0,
+          44.0,
+          51.0,
+          58.0
+        ],
+        "marlborough": [
+          23.0,
+          26.0,
+          31.0,
+          37.0,
+          44.0,
+          51.0
+        ],
+        "nelson": [
+          30.0,
+          33.0,
+          38.0,
+          45.0,
+          52.0,
+          59.0
+        ],
+        "northland": [
+          28.0,
+          31.0,
+          35.0,
+          41.0,
+          48.0,
+          55.0
+        ],
+        "otago": [
+          28.0,
+          31.0,
+          37.0,
+          45.0,
+          54.0,
+          62.0
+        ],
+        "southland": [
+          18.0,
+          20.0,
+          24.0,
+          29.0,
+          35.0,
+          41.0
+        ],
+        "taranaki": [
+          24.0,
+          27.0,
+          31.0,
+          36.0,
+          42.0,
+          48.0
+        ],
+        "tasman": [
+          22.0,
+          25.0,
+          29.0,
+          35.0,
+          42.0,
+          49.0
+        ],
+        "waikato": [
+          35.0,
+          39.0,
+          45.0,
+          53.0,
+          62.0,
+          70.0
+        ],
+        "wellington": [
+          43.0,
+          47.0,
+          53.0,
+          60.0,
+          68.0,
+          75.0
+        ],
+        "west-coast": [
+          16.0,
+          18.0,
+          21.0,
+          25.0,
+          30.0,
+          35.0
+        ]
+      }
     }
   },
   "pointFeatures": {
@@ -25382,7 +25814,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "source",
       "note": "Loaded Stats NZ regional council boundaries and simplified them for browser rendering.",
       "rowCount": 16,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
     },
     {
       "pipeline": "housing_affordability",
@@ -25390,7 +25822,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: join MHUD local housing statistics with income data and Stats NZ CPI.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
     },
     {
       "pipeline": "stats_nz_population",
@@ -25398,7 +25830,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: Stats NZ API population estimates by region and census years.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
     },
     {
       "pipeline": "broadband_rollout",
@@ -25406,7 +25838,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: Crown Infrastructure Partners broadband rollout tables by coverage area.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
     },
     {
       "pipeline": "rsm_cell_sites",
@@ -25414,7 +25846,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: RSM licence/site records aggregated to regions.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
     },
     {
       "pipeline": "stats_nz_workplace",
@@ -25422,7 +25854,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: census workplace address and commuting flow tables.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
     },
     {
       "pipeline": "land_cover_database",
@@ -25430,7 +25862,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: LCDB versions grouped into productive land-cover classes.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
     },
     {
       "pipeline": "forestry_cover",
@@ -25438,7 +25870,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: combine MPI National Exotic Forest Description regional tables with LCDB forest classes over time.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
     },
     {
       "pipeline": "climate_pressure",
@@ -25446,7 +25878,7 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: MfE, NIWA, and council hazard layers composited by region.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
     },
     {
       "pipeline": "electoral_commission_results",
@@ -25454,7 +25886,31 @@ const NZ_CHANGE_MAP_DATA = {
       "mode": "seed",
       "note": "Seeded now. Target: Electoral Commission party vote by electorate mapped to regions.",
       "rowCount": 96,
-      "createdAt": "2026-05-21 13:24:10"
+      "createdAt": "2026-05-21 13:43:12"
+    },
+    {
+      "pipeline": "health_drug_harm",
+      "sourceUrl": "https://www.healthnz.govt.nz/about-us/health-data/health-surveys/new-zealand-health-survey",
+      "mode": "seed",
+      "note": "Seeded now. Target: combine NZ Health Survey substance-use estimates, Health NZ releases, and Drug Harm Index weightings by region.",
+      "rowCount": 96,
+      "createdAt": "2026-05-21 13:43:12"
+    },
+    {
+      "pipeline": "police_crime_rate",
+      "sourceUrl": "https://www.police.govt.nz/about-us/publications-statistics/data-and-statistics/policedatanz",
+      "mode": "seed",
+      "note": "Seeded now. Target: join Police recorded victimisations with Stats NZ regional population estimates to calculate rates per 1,000 people.",
+      "rowCount": 96,
+      "createdAt": "2026-05-21 13:43:12"
+    },
+    {
+      "pipeline": "stats_nz_demographics",
+      "sourceUrl": "https://www.stats.govt.nz/topics/population/",
+      "mode": "seed",
+      "note": "Seeded now. Target: Stats NZ census and population tables for age, ethnicity, migration, and diversity indicators.",
+      "rowCount": 96,
+      "createdAt": "2026-05-21 13:43:12"
     }
   ]
 };

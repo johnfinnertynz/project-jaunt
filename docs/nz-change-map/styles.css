@@ -217,7 +217,7 @@ h2 {
 
 .dataset-tabs {
   display: grid;
-  grid-template-columns: repeat(9, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 8px;
   margin-bottom: 14px;
   overflow-x: auto;
@@ -588,7 +588,7 @@ input[type="range"] {
   }
 
   .dataset-tabs {
-    grid-template-columns: repeat(9, 142px);
+    grid-template-columns: repeat(12, 142px);
   }
 
   .data-notes,

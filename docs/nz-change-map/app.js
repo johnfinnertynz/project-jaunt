@@ -186,7 +186,10 @@ const DATASET_EXPLAINERS = {
   farmland: "This estimates the share of land used for pasture, crops, and other productive rural cover. Falling values can indicate urban edge pressure, forestry conversion, or land-use change.",
   forestry: "This tracks regional forest cover, including indigenous forest, planted production forest, and land converted into woodlots or plantation blocks. It is designed to combine MPI forestry tables with LCDB satellite land-cover snapshots.",
   climatePressure: "This composite is designed to combine coastal exposure, flood, heat, drought, and severe-weather risk indicators into a regional pressure score.",
-  politics: "This index is a simplified view of regional party-vote position over time. Lower values lean centre-left in this prototype; higher values lean centre-right."
+  politics: "This index is a simplified view of regional party-vote position over time. Lower values lean centre-left in this prototype; higher values lean centre-right.",
+  drugUse: "This is a harm-pressure view rather than a moral judgement. The intended live layer combines health survey results, drug-harm weighting, treatment demand, wastewater/drug monitoring where public, and regional population context.",
+  crimeRate: "This normalises recorded victimisations by population so large regions do not dominate just because they have more people. It is best read as reported-crime pressure, not total harm or safety by itself.",
+  demographics: "This combines population mix signals such as age structure, ethnicity, migration, and urbanisation. Higher values point to faster demographic change that can affect housing, schools, healthcare, transport, and local services."
 };
 
 function yearIndex() {
