@@ -12,6 +12,7 @@
   ],
   "host_permissions": [
     "*://*.twitch.tv/*",
+    "*://usher.ttvnw.net/*",
     "*://*.ttvnw.net/*",
     "*://*.jtvnw.net/*",
     "*://*.twitchcdn.net/*"

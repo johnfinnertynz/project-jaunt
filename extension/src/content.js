@@ -131,7 +131,7 @@
     return "home";
   }
 
-  function clearSessionDiagnostics(reason) {
+  function clearSessionDiagnostics(reason, options = {}) {
     state.network = {
       ...state.network,
       cdnHosts: {},
@@ -140,9 +140,11 @@
     state.perfSeen = new Set();
     state.perfSamples = [];
     state.probeSamples = [];
-    state.pendingSwitch = null;
-    state.switchHistory = [];
-    saveSwitchState();
+    if (!options.preserveSwitchTracking) {
+      state.pendingSwitch = null;
+      state.switchHistory = [];
+      saveSwitchState();
+    }
 
     const input = document.querySelector("#twitch-diagnostics-console [data-cdn-input]");
     if (input) input.value = "";
@@ -520,7 +522,9 @@
         </div>
         <div class="tdc-tools">
           <button class="tdc-button" type="button" data-probe>Probe CDN</button>
-          <button class="tdc-button tdc-danger" type="button" data-avoid-cdn>Avoid CDN + Reload</button>
+          <button class="tdc-button tdc-danger" type="button" data-avoid-cdn>Renegotiate CDN</button>
+          <button class="tdc-button" type="button" data-client-chrome>Try Chrome Client</button>
+          <button class="tdc-button" type="button" data-client-reset>Reset Client</button>
           <button class="tdc-button" type="button" data-clear-avoids>Clear Avoids</button>
           <button class="tdc-button" type="button" data-copy>Copy JSON</button>
           <button class="tdc-button" type="button" data-export>Download JSON</button>
@@ -528,7 +532,7 @@
         </div>
         <div class="tdc-manual">
           <input class="tdc-input" type="text" data-cdn-input placeholder="Paste Twitch segment URL or CDN host">
-          <button class="tdc-button tdc-danger" type="button" data-avoid-entered-cdn>Avoid Entered CDN + Reload</button>
+          <button class="tdc-button tdc-danger" type="button" data-avoid-entered-cdn>Hard Block Entered CDN</button>
         </div>
         <div class="tdc-card">
           <div class="tdc-label">Avoided CDNs</div>
@@ -629,7 +633,7 @@
     });
 
     root.querySelector("[data-avoid-cdn]").addEventListener("click", async () => {
-      await avoidCurrentCdn();
+      await renegotiateCdn();
     });
 
     root.querySelector("[data-avoid-entered-cdn]").addEventListener("click", async () => {
@@ -640,6 +644,14 @@
     root.querySelector("[data-clear-avoids]").addEventListener("click", async () => {
       await clearAvoidedCdns();
       render();
+    });
+
+    root.querySelector("[data-client-chrome]").addEventListener("click", async () => {
+      await setClientProfile("chrome-windows");
+    });
+
+    root.querySelector("[data-client-reset]").addEventListener("click", async () => {
+      await setClientProfile("default");
     });
 
     makeDraggable(root);
@@ -743,6 +755,46 @@
     const host = diagnostics.cdn.dominant?.host || parseCdnHost(getVideoRecentRequests()[0]?.url);
 
     await avoidSpecificCdn(host);
+  }
+
+  async function renegotiateCdn() {
+    const diagnostics = getDiagnostics();
+    const host = diagnostics.cdn.dominant?.host || parseCdnHost(getVideoRecentRequests()[0]?.url);
+
+    if (host) {
+      state.pendingSwitch = {
+        old: summarizeHostStats(host),
+        oldEdge: getCdnEdgeDetails(host),
+        startedAt: Date.now(),
+        url: location.href
+      };
+      saveSwitchState();
+    }
+
+    await clearAvoidedCdns();
+    clearSessionDiagnostics("Forcing clean Twitch player negotiation without blocking the current CDN.", {
+      preserveSwitchTracking: Boolean(host)
+    });
+    addLog("Reloading Twitch. If the same CDN returns, try Chrome Client, then Renegotiate CDN again.");
+    window.setTimeout(() => location.reload(), 500);
+  }
+
+  async function setClientProfile(profile) {
+    const response = await sendRuntimeMessage({
+      type: "TWITCH_DIAGNOSTICS_SET_CLIENT_PROFILE",
+      profile
+    });
+
+    if (!response?.ok) {
+      addLog(`Could not set client profile: ${response?.error || "unknown error"}`);
+      render();
+      return;
+    }
+
+    addLog(response.profile === "chrome-windows"
+      ? "Applied experimental Chrome-like client profile to Twitch playlist requests. Reloading."
+      : "Reset Twitch playlist client profile. Reloading.");
+    window.setTimeout(() => location.reload(), 500);
   }
 
   async function avoidSpecificCdn(input) {

@@ -39,15 +39,16 @@ Temporary Firefox add-ons are removed when the browser restarts. For permanent i
 Twitch controls CDN selection internally, so the extension cannot directly choose a specific edge server. The reliable workaround is:
 
 1. Let playback run until the console detects the active CDN.
-2. Click **Avoid CDN + Reload**.
+2. Click **Renegotiate CDN**.
 3. The extension snapshots the old CDN's request count, average response time, latest response time, and failures.
-4. The extension blocks that CDN host for 5 minutes and reloads Twitch.
-5. Twitch should reconnect through a different available CDN edge.
-6. The **CDN Switch Comparison** section shows old-vs-new CDN stats, including average and latest response-time deltas.
+4. The extension clears temporary CDN blocks and reloads Twitch so the player asks for a fresh playlist.
+5. The **CDN Switch Comparison** section shows old-vs-new CDN stats, including average and latest response-time deltas.
 
-Use **Clear Avoids** to remove all temporary CDN blocks. If Twitch reconnects to the same slow host, wait for more media requests to appear and run the avoid action again.
+If Twitch reconnects to the same slow host, click **Try Chrome Client**, then use **Renegotiate CDN** again. This experimentally changes the client signature sent to Twitch playlist allocation requests. It may not affect CDN choice because Twitch usually allocates CDN edges from IP/POP/DNS and internal capacity signals.
 
-You can also paste a full Twitch segment URL, for example a `.ts` request from the browser network panel, into the manual CDN field and click **Avoid Entered CDN + Reload**. Static asset hosts such as `static-cdn.jtvnw.net` are intentionally not blocked because they serve site assets rather than the video stream.
+Use **Clear Avoids** to remove all temporary CDN blocks. Hard blocking a video CDN can produce Twitch Error #2000 if Twitch reuses a playlist that still points at the blocked host, so the hard-block button is best treated as an advanced test.
+
+You can also paste a full Twitch segment URL, for example a `.ts` request from the browser network panel, into the manual CDN field and click **Hard Block Entered CDN**. Static asset hosts such as `static-cdn.jtvnw.net` are intentionally not blocked because they serve site assets rather than the video stream.
 
 ## Notes
 

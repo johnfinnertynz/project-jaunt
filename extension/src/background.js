@@ -3,7 +3,9 @@ const api = globalThis.browser || globalThis.chrome;
 const requestStarts = new Map();
 const tabDiagnostics = new Map();
 const CDN_RULE_ID_START = 20000;
+const CLIENT_RULE_ID = 19000;
 const CDN_RULE_STORAGE_KEY = "twitchDiagnosticsAvoidedCdns";
+const CLIENT_PROFILE_STORAGE_KEY = "twitchDiagnosticsClientProfile";
 
 const CDN_HOST_HINTS = [
   "ttvnw.net",
@@ -237,6 +239,46 @@ async function clearExpiredAvoidedCdns() {
   }
 }
 
+async function setClientProfile(profile = "default") {
+  if (!api.declarativeNetRequest?.updateDynamicRules) {
+    throw new Error("This browser does not expose dynamic request rules to the extension.");
+  }
+
+  const cleanProfile = profile === "chrome-windows" ? "chrome-windows" : "default";
+  const update = {
+    removeRuleIds: [CLIENT_RULE_ID]
+  };
+
+  if (cleanProfile === "chrome-windows") {
+    update.addRules = [{
+      id: CLIENT_RULE_ID,
+      priority: 2,
+      action: {
+        type: "modifyHeaders",
+        requestHeaders: [{
+          header: "user-agent",
+          operation: "set",
+          value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+        }]
+      },
+      condition: {
+        urlFilter: "||usher.ttvnw.net^",
+        resourceTypes: [
+          "xmlhttprequest",
+          "other"
+        ]
+      }
+    }];
+  }
+
+  await callExtensionApi(api.declarativeNetRequest.updateDynamicRules.bind(api.declarativeNetRequest), update);
+  await callExtensionApi(api.storage.local.set.bind(api.storage.local), {
+    [CLIENT_PROFILE_STORAGE_KEY]: cleanProfile
+  });
+
+  return { profile: cleanProfile };
+}
+
 function rememberRequest(tabId, sample) {
   if (tabId < 0) return;
   if (!isVideoDeliveryHost(sample.host)) return;
@@ -400,6 +442,17 @@ async function handleRuntimeMessage(message, sender) {
     try {
       const avoidedCdns = await clearAvoidedCdn(message.host || null);
       return { ok: true, avoidedCdns };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
+  if (message?.type === "TWITCH_DIAGNOSTICS_SET_CLIENT_PROFILE") {
+    try {
+      return {
+        ok: true,
+        ...(await setClientProfile(message.profile))
+      };
     } catch (error) {
       return { ok: false, error: error.message };
     }
