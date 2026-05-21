@@ -127,6 +127,17 @@ function classifyDelivery(url, resourceType = "") {
   return "video delivery";
 }
 
+function getHeaderValue(headers = [], name) {
+  const header = headers.find((item) => item.name?.toLowerCase() === name.toLowerCase());
+  return header?.value || null;
+}
+
+function getContentLength(headers = []) {
+  const value = getHeaderValue(headers, "content-length");
+  const parsed = Number.parseInt(value || "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 async function readAvoidedCdns() {
   const result = await callExtensionApi(api.storage.local.get.bind(api.storage.local), CDN_RULE_STORAGE_KEY);
   return result?.[CDN_RULE_STORAGE_KEY] || {};
@@ -235,9 +246,11 @@ function rememberRequest(tabId, sample) {
     count: 0,
     failures: 0,
     totalMs: 0,
+    totalBytes: 0,
     deliveryTypes: {},
     lastStatus: null,
     lastUrl: null,
+    lastBytes: 0,
     lastDeliveryType: null,
     lastMs: null,
     lastSeen: null
@@ -247,9 +260,11 @@ function rememberRequest(tabId, sample) {
   hostState.count += 1;
   hostState.failures += sample.ok ? 0 : 1;
   hostState.totalMs += sample.durationMs;
+  hostState.totalBytes += sample.bytes || 0;
   hostState.deliveryTypes[deliveryType] = (hostState.deliveryTypes[deliveryType] || 0) + 1;
   hostState.lastStatus = sample.statusCode || null;
   hostState.lastUrl = sample.url;
+  hostState.lastBytes = sample.bytes || 0;
   hostState.lastDeliveryType = deliveryType;
   hostState.lastMs = sample.durationMs;
   hostState.lastSeen = sample.endedAt;
@@ -305,6 +320,7 @@ api.webRequest.onCompleted.addListener(
       type: details.type,
       statusCode: details.statusCode,
       ok: details.statusCode >= 200 && details.statusCode < 400,
+      bytes: getContentLength(details.responseHeaders || []),
       durationMs: Math.max(0, Math.round(details.timeStamp - start.startedAt)),
       endedAt: Date.now()
     });
@@ -316,7 +332,8 @@ api.webRequest.onCompleted.addListener(
       "*://*.jtvnw.net/*",
       "*://*.twitchcdn.net/*"
     ]
-  }
+  },
+  ["responseHeaders"]
 );
 
 api.webRequest.onErrorOccurred.addListener(

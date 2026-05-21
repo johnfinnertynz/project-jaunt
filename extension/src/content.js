@@ -224,16 +224,26 @@
       activeRangeStart = start;
     }
 
-    if (!Number.isFinite(liveEdge)) return null;
+    if (!Number.isFinite(liveEdge)) {
+      const bufferAhead = getBufferedAhead(video);
+      return bufferAhead !== null ? Math.max(0, bufferAhead) : null;
+    }
 
     const latency = liveEdge - currentTime;
     const activeWindow = activeRangeStart !== null ? liveEdge - activeRangeStart : null;
 
-    if (!Number.isFinite(latency) || latency < 0) return null;
+    if (!Number.isFinite(latency) || latency < 0) {
+      const bufferAhead = getBufferedAhead(video);
+      return bufferAhead !== null ? Math.max(0, bufferAhead) : null;
+    }
 
     // Twitch sometimes exposes absolute media timelines. Those produce huge
-    // offsets that are not meaningful user-facing live latency values.
-    if (latency > 300) return null;
+    // offsets that are not meaningful user-facing live latency values. In that
+    // case, show the buffered distance to the current media edge instead.
+    if (latency > 300) {
+      const bufferAhead = getBufferedAhead(video);
+      return bufferAhead !== null ? Math.max(0, bufferAhead) : null;
+    }
     if (activeWindow !== null && activeWindow > 0 && latency > activeWindow + 5) return null;
 
     return latency;
@@ -262,6 +272,7 @@
         durationMs: Math.round(entry.duration || 0),
         transferSize: entry.transferSize || 0,
         encodedBodySize: entry.encodedBodySize || 0,
+        decodedBodySize: entry.decodedBodySize || 0,
         startTime: Math.round(entry.startTime || 0),
         seenAt: Date.now()
       });
@@ -386,10 +397,15 @@
 
   function getBandwidthEstimate() {
     const now = Date.now();
-    const recent = state.perfSamples.filter((sample) => now - sample.seenAt < 30000);
-    const totalBytes = recent.reduce((sum, sample) => sum + (sample.transferSize || sample.encodedBodySize || 0), 0);
+    const recentNetwork = getVideoRecentRequests().filter((sample) => now - sample.endedAt < 30000);
+    const networkBytes = recentNetwork.reduce((sum, sample) => sum + (sample.bytes || 0), 0);
 
-    return totalBytes / 30;
+    if (networkBytes > 0) return networkBytes / 30;
+
+    const recent = state.perfSamples.filter((sample) => now - sample.seenAt < 30000 && isVideoDeliveryHost(sample.host));
+    const totalBytes = recent.reduce((sum, sample) => sum + (sample.transferSize || sample.encodedBodySize || sample.decodedBodySize || 0), 0);
+
+    return totalBytes > 0 ? totalBytes / 30 : null;
   }
 
   function getDiagnostics() {
