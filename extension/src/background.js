@@ -94,7 +94,16 @@ function isKnownCdnHost(host) {
 function isVideoDeliveryHost(host) {
   return isKnownCdnHost(host) &&
     host !== "static-cdn.jtvnw.net" &&
-    !host.startsWith("static-cdn.");
+    !host.startsWith("static-cdn.") &&
+    (
+      host.includes("hls.ttvnw.net") ||
+      host.includes("cloudfront.hls.ttvnw.net") ||
+      host.includes("video") ||
+      host.includes("vod") ||
+      host.includes("twitchcdn.net") ||
+      host.includes("akamaized.net") ||
+      host.includes("fastly.net")
+    );
 }
 
 async function readAvoidedCdns() {
@@ -198,6 +207,7 @@ async function clearExpiredAvoidedCdns() {
 
 function rememberRequest(tabId, sample) {
   if (tabId < 0) return;
+  if (!isVideoDeliveryHost(sample.host)) return;
 
   const state = getTabState(tabId);
   const hostState = state.cdnHosts[sample.host] || {

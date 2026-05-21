@@ -102,12 +102,16 @@
 
   function isMediaPerformanceEntry(entry) {
     const name = entry.name || "";
-    return name.includes(".m3u8") ||
-      name.includes(".ts") ||
-      name.includes(".m4s") ||
-      name.includes("ttvnw.net") ||
-      name.includes("jtvnw.net") ||
-      name.includes("twitchcdn.net");
+    const host = parseCdnHost(name);
+
+    return isVideoDeliveryHost(host) &&
+      (
+        name.includes(".m3u8") ||
+        name.includes(".ts") ||
+        name.includes(".m4s") ||
+        name.includes("/hls/") ||
+        name.includes("/vod/")
+      );
   }
 
   function addLog(message) {
@@ -222,7 +226,7 @@
   }
 
   function getDominantCdn() {
-    const hosts = state.network.cdnHosts || {};
+    const hosts = getVideoCdnHosts();
     const hostRows = Object.entries(hosts)
       .map(([host, stats]) => ({
         host,
@@ -236,8 +240,20 @@
 
     if (hostRows[0]) return hostRows[0];
 
-    const perfHost = state.perfSamples.find((sample) => sample.host)?.host;
+    const perfHost = state.perfSamples.find((sample) => isVideoDeliveryHost(sample.host))?.host;
     return perfHost ? { host: perfHost, count: 0, avgMs: null } : null;
+  }
+
+  function getVideoCdnHosts() {
+    return Object.fromEntries(
+      Object.entries(state.network.cdnHosts || {})
+        .filter(([host]) => isVideoDeliveryHost(host))
+    );
+  }
+
+  function getVideoRecentRequests() {
+    return (state.network.recentRequests || [])
+      .filter((request) => isVideoDeliveryHost(request.host || parseCdnHost(request.url)));
   }
 
   function summarizeHostStats(host, stats = null) {
@@ -295,7 +311,7 @@
   function getResponsivenessSummary() {
     const dominant = getDominantCdn();
     const samples = [
-      ...Object.values(state.network.cdnHosts || {})
+      ...Object.values(getVideoCdnHosts())
         .filter((stats) => stats.lastMs !== null && stats.lastMs !== undefined)
         .map((stats) => stats.lastMs),
       ...state.probeSamples.map((sample) => sample.durationMs)
@@ -333,8 +349,9 @@
     const total = quality ? quality.totalVideoFrames : null;
     const droppedPct = total ? ((dropped / total) * 100).toFixed(2) : null;
 
-    const recentUrl = state.network.recentRequests[0]?.url ||
-      state.perfSamples[0]?.url ||
+    const recentVideoRequests = getVideoRecentRequests();
+    const recentUrl = recentVideoRequests[0]?.url ||
+      state.perfSamples.find((sample) => isVideoDeliveryHost(sample.host))?.url ||
       responsiveness.dominant?.host;
 
     return {
@@ -593,7 +610,7 @@
 
   async function probeCdn() {
     const diagnostics = getDiagnostics();
-    const candidate = diagnostics.network.recentRequests[0]?.url ||
+    const candidate = getVideoRecentRequests()[0]?.url ||
       diagnostics.performance.recentMediaEntries[0]?.url;
 
     if (!candidate) {
@@ -653,7 +670,7 @@
 
   async function avoidCurrentCdn() {
     const diagnostics = getDiagnostics();
-    const host = diagnostics.cdn.dominant?.host || parseCdnHost(diagnostics.network.recentRequests[0]?.url);
+    const host = diagnostics.cdn.dominant?.host || parseCdnHost(getVideoRecentRequests()[0]?.url);
 
     await avoidSpecificCdn(host);
   }
@@ -726,7 +743,7 @@
     const table = root.querySelector("[data-cdn-table]");
     if (!table) return;
 
-    const rows = Object.entries(diagnostics.network.cdnHosts || {})
+    const rows = Object.entries(getVideoCdnHosts())
       .sort(([, a], [, b]) => (b.count || 0) - (a.count || 0))
       .slice(0, 8)
       .map(([host, stats]) => `
