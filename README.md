@@ -2,6 +2,8 @@
 
 Project Jaunt is the working home for Twitch Diagnostics Console, a browser add-on for advanced Twitch playback logging.
 
+Public project page: https://johnfinnertynz.github.io/project-jaunt/
+
 The focus is practical and evidence-based:
 
 - capture Twitch playback and CDN diagnostics

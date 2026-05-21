@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://johnfinnertynz.github.io/project-jaunt/sitemap.xml
