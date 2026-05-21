@@ -6,7 +6,7 @@
     <title>NZ Change Map</title>
     <meta
       name="description"
-      content="An interactive satellite time-map prototype for exploring how New Zealand changes over time across housing affordability, population density, fibre rollout, cell towers, workplace patterns, and land cover."
+      content="An interactive satellite time-map prototype for exploring how New Zealand changes over time across housing affordability, population density, fibre rollout, cell towers, workplace patterns, forestry, and land cover."
     >
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://johnfinnertynz.github.io/project-jaunt/nz-change-map/">
@@ -69,6 +69,64 @@
           pipelines are connected. The app is designed to ingest official open sources such as
           Stats NZ, MHUD, RBNZ, LCDB, MPI forestry, RSM, and broadband rollout datasets.
         </p>
+      </section>
+
+      <section class="forestry-section" aria-labelledby="forestry-title">
+        <div class="section-heading">
+          <p class="eyebrow">Forestry</p>
+          <h2 id="forestry-title">Trees, harvest cycles, and land-use change</h2>
+          <p>
+            The Forestry tab is the first pass at this layer. This section lays out the public
+            datasets that can turn it from seed values into a proper time series for planted
+            production forest, native forest cover, harvest pressure, wood processing, and
+            farm-to-forest conversion.
+          </p>
+        </div>
+        <div class="forestry-panel">
+          <div class="forestry-stats" aria-label="Forestry headline indicators">
+            <div>
+              <span>Planted forest estate</span>
+              <strong>1.79m ha</strong>
+              <p>MPI reports New Zealand's planted production forest area as at April 2024.</p>
+            </div>
+            <div>
+              <span>Dominant species</span>
+              <strong>91%</strong>
+              <p>Radiata pine share of the planted production forest estate.</p>
+            </div>
+            <div>
+              <span>Harvested timber</span>
+              <strong>32.7m m3</strong>
+              <p>Estimated timber harvested in 2024, useful for harvest-cycle pressure.</p>
+            </div>
+          </div>
+          <div class="forestry-grid">
+            <article class="info-card">
+              <span>Production forest</span>
+              <h3>MPI NEFD</h3>
+              <p>Annual planted-forest estate tables covering area, age class, species, planting, harvesting, and regional wood supply.</p>
+              <a href="https://www.mpi.govt.nz/forestry/forest-industry-and-workforce/forestry-wood-processing-data/new-zealand-forest-data/" target="_blank" rel="noreferrer">Forest data</a>
+            </article>
+            <article class="info-card">
+              <span>Satellite land cover</span>
+              <h3>LCDB</h3>
+              <p>Satellite-derived land-cover snapshots for forest, pasture, built-up areas, wetlands, scrub, and other classes.</p>
+              <a href="https://nedc.nz/content/new-zealand-land-cover-database/" target="_blank" rel="noreferrer">Land Cover Database</a>
+            </article>
+            <article class="info-card">
+              <span>Processing pressure</span>
+              <h3>Wood processing</h3>
+              <p>Roundwood removals, sawn timber, panels, pulp, paper, stocks, and regional processing estimates.</p>
+              <a href="https://www.canopy.govt.nz/forestry-data-research/wood-processing" target="_blank" rel="noreferrer">Processing data</a>
+            </article>
+            <article class="info-card">
+              <span>Pipeline target</span>
+              <h3>Next build</h3>
+              <p>Join NEFD regional tables to LCDB forest classes, then add harvest/removal indicators for context on whether tree cover is mature, expanding, or being cut.</p>
+              <a href="https://nefd.mpi.govt.nz/?page=Home" target="_blank" rel="noreferrer">NEFD survey portal</a>
+            </article>
+          </div>
+        </div>
       </section>
 
       <section class="info-section" aria-labelledby="security-title">
