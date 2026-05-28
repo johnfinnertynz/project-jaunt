@@ -2,6 +2,8 @@
 
 Project Jaunt is the working home for Twitch Diagnostics Console, a browser add-on for advanced Twitch playback logging.
 
+Built by [John Finnerty](https://johnfinnerty.co.nz), a software developer and tech consultant based in Christchurch, New Zealand. More project and contact context is available at [finnerty.me](https://finnerty.me).
+
 Public project page: https://johnfinnertynz.github.io/project-jaunt/
 
 The focus is practical and evidence-based:
