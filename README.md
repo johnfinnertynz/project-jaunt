@@ -6,6 +6,8 @@ Built by [John Finnerty](https://johnfinnerty.co.nz), a software developer and t
 
 Public project page: https://johnfinnertynz.github.io/project-jaunt/
 
+Project case study: [Project Jaunt Case Study](https://www.johnfinnerty.co.nz/projects/project-jaunt.html)
+
 The focus is practical and evidence-based:
 
 - capture Twitch playback and CDN diagnostics
